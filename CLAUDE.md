@@ -231,6 +231,58 @@ scripts/
 * No game-level context beyond implicit team aggregates (e.g., Vegas lines, injury reports)
 * Assists over-prediction bias (~59%) suggests the model can't distinguish high-assist games
 
+---
+
+## Feature Engineering (Current)
+
+All features are **exponential decay averages** of each player's own historical stats, computed with `β=0.99` (per-day decay). The `h_` prefix denotes "historical".
+
+### Decay Stats (16 per player)
+
+| Feature | Description |
+|---|---|
+| `h_points` | Scoring average |
+| `h_assists` | Assist average |
+| `h_reboundsTotal` | Total rebound average |
+| `h_reboundsDefensive` | Defensive rebound average |
+| `h_reboundsOffensive` | Offensive rebound average |
+| `h_blocks` | Block average |
+| `h_steals` | Steal average |
+| `h_turnovers` | Turnover average |
+| `h_foulsPersonal` | Personal foul average |
+| `h_fieldGoalsMade` | FGM average |
+| `h_fieldGoalsAttempted` | FGA average |
+| `h_threePointersMade` | 3PM average |
+| `h_threePointersAttempted` | 3PA average |
+| `h_freeThrowsMade` | FTM average |
+| `h_freeThrowsAttempted` | FTA average |
+| `h_numMinutes` | Minutes average (also used as loss weight) |
+
+### Additional Per-Player Features
+
+| Feature | Description |
+|---|---|
+| `home` | Binary flag — 1 if player's team is home, 0 if away |
+
+### How Features Are Used
+
+**`X_team` (game encoder input):**
+Team-level context built by pooling each team's roster into 6 rows (5 starters + 1 minutes-weighted bench aggregate), each with the 16 decay stats. Home and away team vectors are concatenated → shape `[num_games, 192]`.
+
+**`X_players` (player decoder input):**
+Top 8 players per team (by `h_numMinutes`), 16 per game total. Each player has all 16 decay stats + `home` flag → shape `[num_games, 16, 17]`.
+
+**Targets (`Y`):**
+Residuals — `actual_stat - h_stat` for `[points, assists, reboundsTotal]`. The over/under threshold is therefore **0** for every player.
+
+### What Is Missing (Key Gaps)
+
+* No opponent context (defensive rating, pace, position-level matchup stats)
+* No game-level metadata (Vegas lines, rest days, back-to-backs, injury reports)
+* No home/away split in historical averages — only overall averages used
+
+---
+
 ### Next Steps
 
 1. **Improve input features** — primary bottleneck for signal quality:

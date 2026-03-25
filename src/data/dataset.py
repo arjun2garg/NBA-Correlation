@@ -13,13 +13,22 @@ MINUTES_COL = "h_numMinutes"
 
 STAT_COLS = [
     "h_points", "h_assists", "h_reboundsTotal",
-    "h_blocks", "h_steals",
+    "h_steals",
     "h_fieldGoalsAttempted", "h_fieldGoalsMade",
     "h_threePointersAttempted", "h_threePointersMade",
     "h_freeThrowsAttempted", "h_freeThrowsMade",
     "h_reboundsDefensive", "h_reboundsOffensive",
     "h_foulsPersonal", "h_turnovers", "h_numMinutes",
+    # Advanced stats (Layer 2) — present after running ingest/fetch_advanced_stats.py
+    "h_usage_rate", "h_usage_share",
+    "h_pace", "h_off_rating", "h_def_rating", "h_implied_total",
 ]
+
+# Columns added to X_players but NOT pooled into X_team
+PLAYER_EXTRA_COLS = ["home", "cov_pts_ast", "cov_pts_reb"]
+
+# Game-level team scalars appended to X_team after the pooled stat block
+GAME_TEAM_COLS = ["days_rest", "is_b2b"]
 
 TARGET_COLS = ["points", "assists", "reboundsTotal"]
 
@@ -54,28 +63,57 @@ def _pool_team(team_df, n_starters, minutes_col, stat_cols):
     return pd.concat([starters, pd.DataFrame([bench_row])], ignore_index=True)
 
 
+def _safe_team_scalars(players_df, cols):
+    """Extract game-level team scalars from the first player row; default to 0 if missing."""
+    row = players_df.iloc[0]
+    return np.array(
+        [float(row[c]) if c in players_df.columns else 0.0 for c in cols],
+        dtype=np.float32,
+    )
+
+
+def _safe_player_feats(player_df, stat_cols, extra_cols):
+    """Build player feature matrix, filling any missing extra columns with 0."""
+    base = player_df[stat_cols].values.astype(np.float32)
+    parts = [base]
+    for c in extra_cols:
+        if c in player_df.columns:
+            parts.append(player_df[[c]].values.astype(np.float32))
+        else:
+            parts.append(np.zeros((len(player_df), 1), dtype=np.float32))
+    return np.hstack(parts)
+
+
 def build_game(game_df, max_players, n_starters=N_STARTERS, n_players_per_team=N_PLAYERS_PER_TEAM,
                stat_cols=None, target_cols=None, minutes_col=MINUTES_COL):
     stat_cols = stat_cols or STAT_COLS
     target_cols = target_cols or TARGET_COLS
 
-    home_pooled = _pool_team(game_df[game_df["home"] == 1], n_starters, minutes_col, stat_cols)
-    away_pooled = _pool_team(game_df[game_df["home"] == 0], n_starters, minutes_col, stat_cols)
+    home_players_all = game_df[game_df["home"] == 1].sort_values(minutes_col, ascending=False)
+    away_players_all = game_df[game_df["home"] == 0].sort_values(minutes_col, ascending=False)
+
+    home_pooled = _pool_team(home_players_all, n_starters, minutes_col, stat_cols)
+    away_pooled = _pool_team(away_players_all, n_starters, minutes_col, stat_cols)
 
     if home_pooled is None or away_pooled is None:
         return None
 
+    # X_team: pooled stat block for both teams + game-level scalars
+    home_scalars = _safe_team_scalars(home_players_all, GAME_TEAM_COLS)
+    away_scalars = _safe_team_scalars(away_players_all, GAME_TEAM_COLS)
     team_vec = np.concatenate([
-        home_pooled[stat_cols].values,
-        away_pooled[stat_cols].values,
-    ]).ravel()
+        home_pooled[stat_cols].values.ravel(),
+        away_pooled[stat_cols].values.ravel(),
+        home_scalars,
+        away_scalars,
+    ])
 
     # Top n_players_per_team by minutes per team — avoids deep bench noise
-    home_players = game_df[game_df["home"] == 1].sort_values(minutes_col, ascending=False).head(n_players_per_team)
-    away_players = game_df[game_df["home"] == 0].sort_values(minutes_col, ascending=False).head(n_players_per_team)
+    home_players = home_players_all.head(n_players_per_team)
+    away_players = away_players_all.head(n_players_per_team)
     player_df = pd.concat([home_players, away_players], ignore_index=True)
 
-    player_feats = player_df[stat_cols + ["home"]].values
+    player_feats = _safe_player_feats(player_df, stat_cols, PLAYER_EXTRA_COLS)
     line_cols = ["h_" + c for c in target_cols]
     player_lines = player_df[line_cols].values
     # Targets are residuals vs player's own historical average.
