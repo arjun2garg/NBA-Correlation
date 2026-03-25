@@ -23,19 +23,26 @@ from src.evaluate import phi_coefficient, extract_pairs, backtest
 
 # --- config ---
 CHECKPOINT    = "checkpoints/model_latest.pt"
-NUM_SAMPLES   = 100
+NUM_SAMPLES   = 500
 PHI_THRESHOLD = 0.15
 TOP_K         = 10
 PARLAY_ODDS   = -110
 BATCH_SIZE    = 32
 DEVICE        = "cpu"
+SEED          = 42
 
 if __name__ == "__main__":
+    torch.manual_seed(SEED)
+
     # load checkpoint
     ckpt = torch.load(CHECKPOINT, map_location=DEVICE, weights_only=False)
-    cfg  = ckpt["config"]
+    cfg    = ckpt["config"]
     Y_mean = ckpt["Y_mean"]
     Y_std  = ckpt["Y_std"]
+    Xt_mean = ckpt["Xt_mean"]
+    Xt_std  = ckpt["Xt_std"]
+    Xp_mean = ckpt["Xp_mean"]
+    Xp_std  = ckpt["Xp_std"]
 
     encoder = GameEncoder(
         input_dim=cfg["team_dim"], h_dim=cfg["h_dim_enc"], latent_dim=cfg["latent_dim"]
@@ -49,10 +56,12 @@ if __name__ == "__main__":
     encoder.eval()
     decoder.eval()
 
-    # build val loader using checkpoint Y_mean/Y_std (avoids double-normalize)
+    # build val loader using checkpoint normalization stats
     _, val_df = temporal_split(load_processed())
     X_team_v, X_pl_v, masks_v, Y_v, lines_v = build_tensors(val_df)
-    Y_v = (Y_v - Y_mean) / Y_std
+    Y_v      = (Y_v      - Y_mean)  / Y_std
+    X_team_v = (X_team_v - Xt_mean) / Xt_std
+    X_pl_v   = (X_pl_v   - Xp_mean) / Xp_std
     val_loader = DataLoader(
         NBADataset(X_team_v, X_pl_v, Y_v, masks_v, lines_v),
         batch_size=BATCH_SIZE, shuffle=False, num_workers=0,
@@ -66,7 +75,8 @@ if __name__ == "__main__":
     all_records = []
     for batch in results:
         phi = phi_coefficient(
-            batch["OO"], batch["OU"], batch["UO"], batch["UU"], batch["mask_flat"]
+            batch["OO"], batch["OU"], batch["UO"], batch["UU"], batch["mask_flat"],
+            n_stats=len(TARGET_COLS),
         )
         pairs = extract_pairs(
             phi, batch["OO"], batch["OU"], batch["UO"], batch["UU"],
@@ -108,6 +118,94 @@ if __name__ == "__main__":
         w = sum(r["won"] for r in recs)
         pnl = sum(r["pnl"] for r in recs)
         print(f"  {direction}: {n:4d} bets | {w:4d} wins | wr={w/n:.3f} | roi={pnl/n:+.3f}")
+
+    # phi distribution across all valid cross-player pairs
+    print(f"\n=== Phi Distribution (all cross-player pairs) ===")
+    n_stats = len(TARGET_COLS)
+    phi_vals = []
+    for batch in results:
+        phi_b = phi_coefficient(
+            batch["OO"], batch["OU"], batch["UO"], batch["UU"], batch["mask_flat"],
+            n_stats=n_stats,
+        )
+        batch_size, n_vars, _ = phi_b.shape
+        upper = torch.triu(torch.ones(n_vars, n_vars, dtype=torch.bool), diagonal=1)
+        for b in range(batch_size):
+            vals = phi_b[b][upper]
+            phi_vals.append(vals[~torch.isnan(vals)])
+    phi_all = torch.cat(phi_vals)
+    pos = (phi_all > 0).sum().item()
+    neg = (phi_all < 0).sum().item()
+    total = len(phi_all)
+    print(f"  Positive phi: {pos:6d} ({pos/total:.3f})")
+    print(f"  Negative phi: {neg:6d} ({neg/total:.3f})")
+    print(f"  Mean phi    : {phi_all.mean().item():.4f}")
+    print(f"  Std phi     : {phi_all.std().item():.4f}")
+    bins = [(-1.0, -0.5), (-0.5, -0.15), (-0.15, 0.15), (0.15, 0.5), (0.5, 1.01)]
+    for lo, hi in bins:
+        count = ((phi_all >= lo) & (phi_all < hi)).sum().item()
+        print(f"  [{lo:+.2f}, {hi:+.2f}): {count:6d} ({count/total:.3f})")
+
+    # same-team vs cross-team phi breakdown
+    print(f"\n=== Phi by Team Relationship ===")
+    n_players_per_team = 8
+    same_phi, cross_phi = [], []
+    for batch in results:
+        phi_b = phi_coefficient(
+            batch["OO"], batch["OU"], batch["UO"], batch["UU"], batch["mask_flat"],
+            n_stats=n_stats,
+        )
+        batch_size, n_vars, _ = phi_b.shape
+        upper = torch.triu(torch.ones(n_vars, n_vars, dtype=torch.bool), diagonal=1)
+        vars_per_team = n_players_per_team * n_stats
+        for b in range(batch_size):
+            for i in range(n_vars):
+                for j in range(i + 1, n_vars):
+                    v = phi_b[b, i, j].item()
+                    if torch.isnan(phi_b[b, i, j]):
+                        continue
+                    same_team = (i // vars_per_team) == (j // vars_per_team)
+                    if same_team:
+                        same_phi.append(v)
+                    else:
+                        cross_phi.append(v)
+    same_phi  = torch.tensor(same_phi)
+    cross_phi = torch.tensor(cross_phi)
+    print(f"  Same-team  pairs: {len(same_phi):6d} | mean phi={same_phi.mean():.4f} | "
+          f"pct > 0.15: {(same_phi > 0.15).float().mean():.3f} | "
+          f"pct < -0.15: {(same_phi < -0.15).float().mean():.3f}")
+    print(f"  Cross-team pairs: {len(cross_phi):6d} | mean phi={cross_phi.mean():.4f} | "
+          f"pct > 0.15: {(cross_phi > 0.15).float().mean():.3f} | "
+          f"pct < -0.15: {(cross_phi < -0.15).float().mean():.3f}")
+
+    # actual outcome distribution across all valid cross-player pairs
+    print(f"\n=== Actual Joint Outcome Distribution ===")
+    n_stats = len(TARGET_COLS)
+    oo_count = ou_count = uo_count = uu_count = 0
+    for batch in results:
+        actual = batch["actual_over"]          # (batch, n_vars)
+        mask   = batch["mask_flat"]            # (batch, n_vars)
+        batch_size, n_vars = actual.shape
+        for b in range(batch_size):
+            for i in range(n_vars):
+                if mask[b, i] == 0:
+                    continue
+                for j in range(i + 1, n_vars):
+                    if mask[b, j] == 0:
+                        continue
+                    if i // n_stats == j // n_stats:   # same player
+                        continue
+                    ai, aj = actual[b, i].item(), actual[b, j].item()
+                    if   ai == 1 and aj == 1: oo_count += 1
+                    elif ai == 1 and aj == 0: ou_count += 1
+                    elif ai == 0 and aj == 1: uo_count += 1
+                    else:                     uu_count += 1
+    total_pairs = oo_count + ou_count + uo_count + uu_count
+    for label, count in [("OO", oo_count), ("OU", ou_count), ("UO", uo_count), ("UU", uu_count)]:
+        print(f"  {label}: {count:6d}  ({count/total_pairs:.3f})")
+    print(f"  Total cross-player pairs: {total_pairs}")
+    over_rate = (oo_count + ou_count) / total_pairs  # marginal over rate for i
+    print(f"  Marginal over rate (any single stat): {over_rate:.3f}")
 
     if all_records:
         print(f"\n=== Top 10 Bets by Phi ===")

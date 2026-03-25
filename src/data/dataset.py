@@ -148,8 +148,20 @@ def make_loaders(train_df, val_df, batch_size=32, **tensor_kwargs):
     # normalize targets using train statistics
     Y_mean = Y_tr.mean(dim=(0, 1))
     Y_std = Y_tr.std(dim=(0, 1)) + 1e-6
-    Y_tr = (Y_tr - Y_mean) / Y_std
+    Y_tr  = (Y_tr  - Y_mean) / Y_std
     Y_val = (Y_val - Y_mean) / Y_std
+
+    # normalize team features
+    Xt_mean = X_team_tr.mean(dim=0)
+    Xt_std  = X_team_tr.std(dim=0) + 1e-6
+    X_team_tr  = (X_team_tr  - Xt_mean) / Xt_std
+    X_team_val = (X_team_val - Xt_mean) / Xt_std
+
+    # normalize player features — mean/std over (games, players) per feature
+    Xp_mean = X_pl_tr.mean(dim=(0, 1))
+    Xp_std  = X_pl_tr.std(dim=(0, 1))  + 1e-6
+    X_pl_tr  = (X_pl_tr  - Xp_mean) / Xp_std
+    X_pl_val = (X_pl_val - Xp_mean) / Xp_std
 
     train_loader = DataLoader(
         NBADataset(X_team_tr, X_pl_tr, Y_tr, weights_tr, lines_tr),
@@ -159,4 +171,4 @@ def make_loaders(train_df, val_df, batch_size=32, **tensor_kwargs):
         NBADataset(X_team_val, X_pl_val, Y_val, weights_val, lines_val),
         batch_size=batch_size, shuffle=False, num_workers=0,
     )
-    return train_loader, val_loader, Y_mean, Y_std
+    return train_loader, val_loader, Y_mean, Y_std, Xt_mean, Xt_std, Xp_mean, Xp_std

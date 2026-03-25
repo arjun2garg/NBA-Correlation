@@ -33,7 +33,7 @@ DEVICE = "cpu"
 if __name__ == "__main__":
     df = load_processed()
     train_df, val_df = temporal_split(df)
-    train_loader, val_loader, Y_mean, Y_std = make_loaders(train_df, val_df, batch_size=BATCH_SIZE)
+    train_loader, val_loader, Y_mean, Y_std, Xt_mean, Xt_std, Xp_mean, Xp_std = make_loaders(train_df, val_df, batch_size=BATCH_SIZE)
 
     team_dim = next(iter(train_loader))[0].shape[1]
     player_dim = next(iter(train_loader))[1].shape[2]
@@ -68,6 +68,10 @@ if __name__ == "__main__":
         "decoder": decoder.state_dict(),
         "Y_mean": Y_mean,
         "Y_std": Y_std,
+        "Xt_mean": Xt_mean,
+        "Xt_std": Xt_std,
+        "Xp_mean": Xp_mean,
+        "Xp_std": Xp_std,
         "config": {
             "latent_dim": LATENT_DIM,
             "h_dim_enc": H_DIM_ENC,

@@ -104,16 +104,17 @@ Masking is required for variable roster sizes.
 
 ## Loss Design
 
-Reconstruction loss (masked MSE):
+Reconstruction loss (minutes-weighted MSE — starters weighted higher than bench):
 
 ```
-((pred - target)^2 * mask).mean()
+((pred - target)^2 * h_numMinutes_weight).sum() / (weights.sum() * n_stats)
 ```
 
-KL divergence:
+KL divergence with free bits (prevents posterior collapse):
 
 ```
--0.5 * sum(1 + logvar - mu^2 - exp(logvar))
+kl_per_dim = -0.5 * (1 + logvar - mu^2 - exp(logvar))
+kl = sum(clamp(mean_per_dim(kl_per_dim), min=free_bits))
 ```
 
 Total loss:
@@ -122,7 +123,8 @@ Total loss:
 loss = recon + beta * kl
 ```
 
-* `beta` may be annealed during training
+* `beta` annealed linearly from 0 → target over `WARMUP_EPOCHS`
+* `free_bits = 0.5` nats/dim enforces minimum latent usage
 
 ---
 
@@ -150,16 +152,74 @@ You should help design:
 
 ## Current State of the Repo
 
-* Structure is **not finalized**
-* Some work exists in notebooks
-* Scripts and modules may be missing or incomplete
-* `requirements.txt` may be incomplete or empty
+The pipeline is fully implemented and working end-to-end. Key files:
 
-Do not assume:
+```
+src/
+  data/
+    preprocess.py   — exponential decay features, season filtering, saves input/target CSVs
+    dataset.py      — temporal split, team pooling, top-8 players per team, residual targets,
+                      minutes-based weights, feature normalization
+  model.py          — GameEncoder, PlayerDecoder, reparameterize
+  train.py          — weighted MSE loss, KL divergence with free-bits, train/eval loops
+  simulate.py       — Monte Carlo sampling, joint outcome counts (OO/OU/UO/UU)
+  evaluate.py       — phi coefficient, extract_pairs (all 4 directions), parlay backtest
+scripts/
+  preprocess.py     — entry point for preprocessing
+  train.py          — training entry point with KL annealing and checkpoint saving
+  simulate.py       — simulation entry point with backtest reporting
+```
 
-* stable file layout
-* working training pipeline
-* clean separation of concerns
+### Data Design
+
+* **Targets**: residuals — `actual_stat - h_stat` (player's own exponential decay average)
+* **Lines**: set to 0 (threshold is "does player outperform their own history?")
+* **Players**: top 8 per team by `h_numMinutes`, padded to 16 total
+* **Weights**: `h_numMinutes` values — starters contribute more to loss than bench players
+* **Features normalized**: `X_team`, `X_players`, and `Y` all normalized using training-set
+  mean/std, saved in checkpoint for consistent use at inference
+
+### Training Configuration
+
+* `LATENT_DIM = 16`, `H_DIM_ENC = 64`, `H_DIM_DEC = 32`
+* `BETA = 0.001` with 15-epoch linear warmup from 0
+* `FREE_BITS = 0.5` nats/dim — prevents posterior collapse by enforcing minimum KL per dimension
+* `NUM_EPOCHS = 100`
+* Checkpoint saved to `checkpoints/model_latest.pt` (gitignored)
+
+### Simulation Configuration
+
+* `NUM_SAMPLES = 500`, `SEED = 42` (fixed for reproducibility)
+* `PHI_THRESHOLD = 0.15`, `TOP_K = 10` per game
+* Bets on all 4 directions: OO, UU (positive phi), OU, UO (negative phi)
+* Same-player pairs explicitly excluded from phi computation
+
+### Known Issues and Findings
+
+**Feature normalization is critical.** Without normalizing `X_team` and `X_players`:
+* The `home` flag (0/1) is drowned out by large-scale features (h_numMinutes ~25, h_points ~12)
+* The decoder learns biased mean outputs per stat (rebounds +0.05 vs points -0.08 in norm space)
+* This causes rebounds to be predicted "over" ~70% of the time vs actual ~49%
+* Pairwise OO was inflated to 34.6% vs actual 26.2%, OU/UO severely underrepresented
+
+**After normalization:**
+* KL/dim improved from 0.65 → 2.2 — z is used much more effectively
+* Per-stat predicted over rates are much better calibrated
+* OU/UO bets now appear at ~6-12% of total bets (were ~0% before)
+* Mean phi dropped from 0.061 → 0.007 (correctly centered, matching actual near-uniform data)
+
+**Free bits prevent posterior collapse.** Without free_bits, increasing BETA causes KL → 0
+(complete collapse). With `free_bits=0.5`, the model maintains ≥0.5 nats/dim regardless of BETA.
+
+**Current signal is low.** Win rate ~26% vs 27.4% breakeven across all phi thresholds.
+Root cause: only one season (~880 training games) — insufficient data to learn generalizable
+inter-player correlation patterns. Train recon ~0.68 vs val recon ~1.35 indicates overfitting.
+
+### Next Steps
+
+1. **More data**: Add 2022-23, 2023-24 seasons (~3x training data) — primary bottleneck
+2. **Real betting lines**: Replace h_stat proxies with actual sportsbook lines
+3. **Reduce overfitting**: Smaller model or dropout given limited training data
 
 ---
 

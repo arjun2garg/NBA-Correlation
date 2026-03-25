@@ -2,30 +2,33 @@ import torch
 from src.simulate import var_label
 
 
-def phi_coefficient(OO, OU, UO, UU, mask_flat):
+def phi_coefficient(OO, OU, UO, UU, mask_flat, n_stats):
     """
     Compute phi (Matthews) correlation coefficient for all variable pairs.
 
     Args:
         OO, OU, UO, UU : (batch, n_vars, n_vars) — joint outcome counts
         mask_flat       : (batch, n_vars) — 1 for real player-stat slots, 0 for padding
+        n_stats         : int — number of stats per player (used to identify same-player pairs)
 
     Returns:
-        phi : (batch, n_vars, n_vars) — NaN for padded/diagonal entries
+        phi : (batch, n_vars, n_vars) — NaN for padded, diagonal, and same-player entries
     """
     num = OO * UU - OU * UO
     denom = torch.sqrt((OO + OU) * (OO + UO) * (UU + OU) * (UU + UO) + 1e-8)
     phi = (num / denom).clamp(-1, 1)
 
+    nan = torch.tensor(float("nan"))
+    n_vars = phi.shape[1]
+
     # mask out padded pairs
     pair_mask = mask_flat.unsqueeze(2) * mask_flat.unsqueeze(1)   # (batch, n_vars, n_vars)
-    nan = torch.tensor(float("nan"))
     phi = torch.where(pair_mask.bool(), phi, nan)
 
-    # mask out diagonal (self-correlation)
-    n_vars = phi.shape[1]
-    diag = torch.eye(n_vars, dtype=torch.bool, device=phi.device).unsqueeze(0)
-    phi = torch.where(diag.expand_as(phi), nan, phi)
+    # mask out same-player pairs (different stats, same player slot)
+    player_ids = torch.arange(n_vars, device=phi.device) // n_stats
+    same_player = (player_ids.unsqueeze(1) == player_ids.unsqueeze(0)).unsqueeze(0)  # (1, n_vars, n_vars)
+    phi = torch.where(same_player.expand_as(phi), nan, phi)
 
     return phi
 
