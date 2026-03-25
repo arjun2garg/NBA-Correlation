@@ -181,7 +181,7 @@ scripts/
 
 ### Training Configuration
 
-* `LATENT_DIM = 16`, `H_DIM_ENC = 64`, `H_DIM_DEC = 32`
+* `LATENT_DIM = 16`, `H_DIM_ENC = 48`, `H_DIM_DEC = 24`, `DROPOUT = 0.3`
 * `BETA = 0.001` with 15-epoch linear warmup from 0
 * `FREE_BITS = 0.5` nats/dim — prevents posterior collapse by enforcing minimum KL per dimension
 * `NUM_EPOCHS = 100`
@@ -211,15 +211,34 @@ scripts/
 **Free bits prevent posterior collapse.** Without free_bits, increasing BETA causes KL → 0
 (complete collapse). With `free_bits=0.5`, the model maintains ≥0.5 nats/dim regardless of BETA.
 
-**Current signal is low.** Win rate ~26% vs 27.4% breakeven across all phi thresholds.
-Root cause: only one season (~880 training games) — insufficient data to learn generalizable
-inter-player correlation patterns. Train recon ~0.68 vs val recon ~1.35 indicates overfitting.
+**More data (3 seasons) reduced but did not eliminate overfitting.**
+* 3x data (~3,600 games across 2022-23, 2023-24, 2024-25) vs ~880 games before
+* Without dropout: train recon ~0.755 vs val recon ~1.344 — still significant overfitting
+* Win rate 24.4% (below 27.4% breakeven), ROI -11.2%
+* Per-stat over-prediction bias: ~56% predicted over vs ~49% actual across all stats
+
+**Dropout (0.3) + smaller hidden dims resolved the train/val gap.**
+* Architecture: encoder `input → 48 → 48 → latent`, decoder `(latent+player) → 24 → output`
+* Train recon ~0.997 vs val recon ~1.083 — gap reduced from 0.59 → 0.09
+* Win rate 27.9% (above 27.4% breakeven), ROI +1.7%
+* KL/dim dropped to ~0.58 (was 1.89) — dropout compresses encoder, z carries less information
+* Same-team phi mean jumped to 0.167 (was 0.013) — model now finds real same-team correlations
+* Per-stat bias persists: points ~52% (good), rebounds ~55%, assists ~59% vs ~48-50% actual
+
+**Remaining blocker: input features lack sufficient predictive signal.**
+* Current features are only exponential decay averages of the player's own past stats
+* No opponent context (e.g., opponent defensive rating, pace, team matchup stats)
+* No game-level context beyond implicit team aggregates (e.g., Vegas lines, injury reports)
+* Assists over-prediction bias (~59%) suggests the model can't distinguish high-assist games
 
 ### Next Steps
 
-1. **More data**: Add 2022-23, 2023-24 seasons (~3x training data) — primary bottleneck
-2. **Real betting lines**: Replace h_stat proxies with actual sportsbook lines
-3. **Reduce overfitting**: Smaller model or dropout given limited training data
+1. **Improve input features** — primary bottleneck for signal quality:
+   * Opponent defensive stats per position
+   * Team pace features
+   * Rest days / back-to-back flags
+   * Home/away split historical averages
+2. **Real betting lines** — replace h_stat proxies with actual sportsbook lines
 
 ---
 

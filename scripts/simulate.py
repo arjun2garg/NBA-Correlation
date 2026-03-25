@@ -45,11 +45,13 @@ if __name__ == "__main__":
     Xp_std  = ckpt["Xp_std"]
 
     encoder = GameEncoder(
-        input_dim=cfg["team_dim"], h_dim=cfg["h_dim_enc"], latent_dim=cfg["latent_dim"]
+        input_dim=cfg["team_dim"], h_dim=cfg["h_dim_enc"], latent_dim=cfg["latent_dim"],
+        dropout=cfg.get("dropout", 0.0),
     ).to(DEVICE)
     decoder = PlayerDecoder(
         latent_dim=cfg["latent_dim"], player_dim=cfg["player_dim"],
-        h_dim=cfg["h_dim_dec"], output_dim=cfg["n_target_cols"]
+        h_dim=cfg["h_dim_dec"], output_dim=cfg["n_target_cols"],
+        dropout=cfg.get("dropout", 0.0),
     ).to(DEVICE)
     encoder.load_state_dict(ckpt["encoder"])
     decoder.load_state_dict(ckpt["decoder"])
@@ -57,7 +59,7 @@ if __name__ == "__main__":
     decoder.eval()
 
     # build val loader using checkpoint normalization stats
-    _, val_df = temporal_split(load_processed())
+    _, val_df = temporal_split(load_processed(season_suffix="2022-25"))
     X_team_v, X_pl_v, masks_v, Y_v, lines_v = build_tensors(val_df)
     Y_v      = (Y_v      - Y_mean)  / Y_std
     X_team_v = (X_team_v - Xt_mean) / Xt_std

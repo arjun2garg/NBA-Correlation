@@ -6,7 +6,8 @@ ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 PROCESSED_DIR = ROOT / "data" / "processed"
 
-SEASON_START = "2024-10-22"
+# Three regular seasons: 2022-23, 2023-24, 2024-25
+SEASON_START = "2022-10-01"
 SEASON_END = "2025-04-14"
 
 STATS_TO_DECAY = [
@@ -55,7 +56,11 @@ def exp_time_decay_feature(df, stat_col, time_col="gameDateTimeEst", player_col=
 def load_player_stats(path=None):
     path = path or RAW_DIR / "PlayerStatistics.csv"
     stats = pd.read_csv(path, low_memory=False)
-    mask = (stats["gameDateTimeEst"] >= SEASON_START) & (stats["gameDateTimeEst"] <= SEASON_END)
+    mask = (
+        (stats["gameDateTimeEst"] >= SEASON_START) &
+        (stats["gameDateTimeEst"] <= SEASON_END) &
+        (stats["gameType"] == "Regular Season")
+    )
     stats = stats[mask]
     stats = stats[stats["numMinutes"].notna()]
     stats = stats.drop(columns=["gameLabel", "gameSubLabel", "seriesGameNumber"], errors="ignore")
@@ -76,7 +81,7 @@ def build_input_target(df):
     return inputs, target
 
 
-def run(raw_path=None, out_dir=None, season_suffix="2024-25"):
+def run(raw_path=None, out_dir=None, season_suffix="2022-25"):
     out_dir = Path(out_dir) if out_dir else PROCESSED_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 

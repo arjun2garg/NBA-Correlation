@@ -20,8 +20,9 @@ from src.train import train_epoch, evaluate
 
 # --- config ---
 LATENT_DIM = 16
-H_DIM_ENC = 64
-H_DIM_DEC = 32
+H_DIM_ENC = 48
+H_DIM_DEC = 24
+DROPOUT = 0.3
 LR = 1e-3
 BETA = 0.001        # target beta after warmup
 FREE_BITS = 0.5     # min KL per latent dim — prevents posterior collapse
@@ -31,15 +32,15 @@ BATCH_SIZE = 32
 DEVICE = "cpu"
 
 if __name__ == "__main__":
-    df = load_processed()
+    df = load_processed(season_suffix="2022-25")
     train_df, val_df = temporal_split(df)
     train_loader, val_loader, Y_mean, Y_std, Xt_mean, Xt_std, Xp_mean, Xp_std = make_loaders(train_df, val_df, batch_size=BATCH_SIZE)
 
     team_dim = next(iter(train_loader))[0].shape[1]
     player_dim = next(iter(train_loader))[1].shape[2]
 
-    encoder = GameEncoder(input_dim=team_dim, h_dim=H_DIM_ENC, latent_dim=LATENT_DIM).to(DEVICE)
-    decoder = PlayerDecoder(latent_dim=LATENT_DIM, player_dim=player_dim, h_dim=H_DIM_DEC, output_dim=len(TARGET_COLS)).to(DEVICE)
+    encoder = GameEncoder(input_dim=team_dim, h_dim=H_DIM_ENC, latent_dim=LATENT_DIM, dropout=DROPOUT).to(DEVICE)
+    decoder = PlayerDecoder(latent_dim=LATENT_DIM, player_dim=player_dim, h_dim=H_DIM_DEC, output_dim=len(TARGET_COLS), dropout=DROPOUT).to(DEVICE)
     optimizer = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr=LR)
 
     for epoch in range(NUM_EPOCHS):
@@ -76,6 +77,7 @@ if __name__ == "__main__":
             "latent_dim": LATENT_DIM,
             "h_dim_enc": H_DIM_ENC,
             "h_dim_dec": H_DIM_DEC,
+            "dropout": DROPOUT,
             "team_dim": team_dim,
             "player_dim": player_dim,
             "n_target_cols": len(TARGET_COLS),

@@ -3,13 +3,15 @@ import torch.nn as nn
 
 
 class GameEncoder(nn.Module):
-    def __init__(self, input_dim, h_dim=64, latent_dim=16):
+    def __init__(self, input_dim, h_dim=48, latent_dim=16, dropout=0.3):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 2 * h_dim),
+            nn.Linear(input_dim, h_dim),
             nn.ReLU(),
-            nn.Linear(2 * h_dim, h_dim),
+            nn.Dropout(dropout),
+            nn.Linear(h_dim, h_dim),
             nn.ReLU(),
+            nn.Dropout(dropout),
         )
         self.mu = nn.Linear(h_dim, latent_dim)
         self.logvar = nn.Linear(h_dim, latent_dim)
@@ -20,11 +22,12 @@ class GameEncoder(nn.Module):
 
 
 class PlayerDecoder(nn.Module):
-    def __init__(self, latent_dim, player_dim, h_dim=32, output_dim=3):
+    def __init__(self, latent_dim, player_dim, h_dim=24, output_dim=3, dropout=0.3):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(latent_dim + player_dim, h_dim),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(h_dim, output_dim),
         )
 
