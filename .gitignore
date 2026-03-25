@@ -4,7 +4,6 @@ __pycache__/
 *.pyc
 .DS_Store
 data/raw/
-data/advanced/
 checkpoints/
 *.pt
 *.pth

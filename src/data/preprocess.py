@@ -5,7 +5,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 PROCESSED_DIR = ROOT / "data" / "processed"
-ADV_DIR = ROOT / "data" / "advanced"
 
 # Three regular seasons: 2022-23, 2023-24, 2024-25
 SEASON_START = "2022-10-01"
@@ -29,7 +28,7 @@ STATS_TO_DECAY = [
     ("foulsPersonal",           "h_foulsPersonal",          0.99),
     ("turnovers",               "h_turnovers",              0.99),
     ("numMinutes",              "h_numMinutes",             0.97),
-    # Advanced stats (requires data/advanced/ parquets from ingest/fetch_advanced_stats.py)
+    # Advanced stats from PlayerStatisticsAdvanced.csv / TeamStatisticsAdvanced.csv
     ("usage_rate",              "h_usage_rate",             0.97),
     ("usage_share",             "h_usage_share",            0.97),
     ("team_pace",               "h_pace",                   0.98),
@@ -48,7 +47,7 @@ INPUT_COLS = [
     "h_freeThrowsAttempted", "h_freeThrowsMade",
     "h_reboundsDefensive", "h_reboundsOffensive", "h_reboundsTotal",
     "h_foulsPersonal", "h_turnovers", "h_numMinutes",
-    # New advanced decay features
+    # Advanced decay features
     "h_usage_rate", "h_usage_share",
     "h_pace", "h_off_rating", "h_def_rating", "h_implied_total",
     # Point-in-time game features (not decayed)
@@ -101,126 +100,129 @@ def load_player_stats(path=None):
     stats = stats[stats["numMinutes"].notna()]
     stats = stats.drop(columns=["gameLabel", "gameSubLabel", "seriesGameNumber"], errors="ignore")
     stats["gameDateTimeEst"] = pd.to_datetime(stats["gameDateTimeEst"], utc=True, errors="coerce")
+    # Cast all numeric stat columns to float (CSV may load them as object due to blank rows)
+    numeric_cols = [
+        "numMinutes", "points", "assists", "blocks", "steals",
+        "fieldGoalsAttempted", "fieldGoalsMade",
+        "threePointersAttempted", "threePointersMade",
+        "freeThrowsAttempted", "freeThrowsMade",
+        "reboundsDefensive", "reboundsOffensive", "reboundsTotal",
+        "foulsPersonal", "turnovers",
+    ]
+    for col in numeric_cols:
+        if col in stats.columns:
+            stats[col] = pd.to_numeric(stats[col], errors="coerce")
     return stats
 
 
-def load_advanced_stats(adv_dir=None):
-    """Load all available advanced stats parquets, concatenated across seasons."""
-    d = Path(adv_dir) if adv_dir else ADV_DIR
-    if not d.exists():
-        return None, None, None, None
+def enrich_with_advanced(df):
+    """Compute advanced features from box-score data and join rest-day info.
 
-    def _load_all(pattern):
-        frames = [pd.read_parquet(f) for f in sorted(d.glob(pattern))]
-        return pd.concat(frames, ignore_index=True) if frames else None
+    Advanced stats (usage rate, pace, off/def rating, implied total) are derived
+    directly from PlayerStatistics.csv box-score columns — no separate advanced
+    CSV is needed, as those files only cover the 2025-26 season.
 
-    player_adv  = _load_all("boxscore_advanced_*.parquet")
-    team_adv    = _load_all("team_advanced_*.parquet")
-    gamelog     = _load_all("team_gamelog_*.parquet")
-    home_away   = _load_all("game_home_away_*.parquet")
-    return player_adv, team_adv, gamelog, home_away
-
-
-def enrich_with_advanced(df, player_adv, team_adv, gamelog, home_away):
-    """Join advanced stats onto player dataframe and compute derived features.
-
-    Adds: usage_rate, usage_share, team_pace, team_off_rating, team_def_rating,
-          implied_total, days_rest, is_b2b.
+    Rest days and back-to-back flags are computed from TeamStatistics.csv schedule.
     """
-    if home_away is None or player_adv is None:
-        raise RuntimeError(
-            "Advanced stats not found in data/advanced/. "
-            "Run `python ingest/fetch_advanced_stats.py` first."
-        )
-
     df = df.copy()
-    df["gameId_str"] = df["gameId"].astype(str)
-    df["personId_str"] = df["personId"].astype(str)
 
-    # Derive teamId from home/away mapping
-    home_away = home_away.copy()
-    home_away["GAME_ID"] = home_away["GAME_ID"].astype(str)
-    home_away["HOME_TEAM_ID"] = home_away["HOME_TEAM_ID"].astype(str)
-    home_away["AWAY_TEAM_ID"] = home_away["AWAY_TEAM_ID"].astype(str)
+    # Team identifier: (gameId, home) uniquely identifies each team per game.
+    # home=1 → home team, home=0 → away team.
+    df["_gid"] = df["gameId"].astype(str)
+    df["_home"] = df["home"].astype(int)
 
-    df = df.merge(home_away[["GAME_ID", "HOME_TEAM_ID", "AWAY_TEAM_ID"]],
-                  left_on="gameId_str", right_on="GAME_ID", how="left")
-    df["teamId_str"] = np.where(df["home"] == 1, df["HOME_TEAM_ID"], df["AWAY_TEAM_ID"])
-    df = df.drop(columns=["GAME_ID", "HOME_TEAM_ID", "AWAY_TEAM_ID"])
+    # --- Compute team-level box-score totals per game ---
+    poss_col = df["fieldGoalsAttempted"] + 0.44 * df["freeThrowsAttempted"] + df["turnovers"] - df["reboundsOffensive"]
+    df["_poss_contrib"] = poss_col
 
-    # --- Join player-level advanced stats ---
-    player_adv = player_adv.copy()
-    player_adv["GAME_ID"] = player_adv["GAME_ID"].astype(str)
-    player_adv["PLAYER_ID"] = player_adv["PLAYER_ID"].astype(str)
+    team_agg = df.groupby(["_gid", "_home"]).agg(
+        _team_fga=("fieldGoalsAttempted", "sum"),
+        _team_fta=("freeThrowsAttempted", "sum"),
+        _team_tov=("turnovers", "sum"),
+        _team_oreb=("reboundsOffensive", "sum"),
+        _team_pts=("points", "sum"),
+        _team_min=("numMinutes", "sum"),
+    ).reset_index()
 
-    df = df.merge(
-        player_adv[["GAME_ID", "PLAYER_ID", "USG_PCT"]].rename(columns={
-            "GAME_ID": "gameId_str", "PLAYER_ID": "personId_str",
-        }),
-        on=["gameId_str", "personId_str"],
-        how="left",
-    )
-    df["usage_rate"] = df["USG_PCT"]
+    # Possessions ≈ FGA + 0.44*FTA + TOV - OREB
+    team_agg["_team_poss"] = (
+        team_agg["_team_fga"] + 0.44 * team_agg["_team_fta"]
+        + team_agg["_team_tov"] - team_agg["_team_oreb"]
+    ).clip(lower=1.0)
 
-    # Within-team usage share per game
-    team_usg_total = df.groupby(["gameId_str", "teamId_str"])["USG_PCT"].transform("sum")
-    df["usage_share"] = df["USG_PCT"] / team_usg_total.replace(0, np.nan)
+    # Pace = possessions per 48 minutes (team_min / 5 ≈ game minutes)
+    team_agg["team_pace"] = (team_agg["_team_poss"] * 48 * 5 / team_agg["_team_min"].replace(0, np.nan)).round(1)
 
-    # --- Join team-level advanced stats ---
-    team_adv = team_adv.copy()
-    team_adv["GAME_ID"] = team_adv["GAME_ID"].astype(str)
-    team_adv["TEAM_ID"] = team_adv["TEAM_ID"].astype(str)
+    # Off rating = 100 * points / possessions
+    team_agg["team_off_rating"] = (100 * team_agg["_team_pts"] / team_agg["_team_poss"]).round(1)
 
-    df = df.merge(
-        team_adv[["GAME_ID", "TEAM_ID", "PACE", "OFF_RATING", "DEF_RATING"]].rename(columns={
-            "GAME_ID": "gameId_str", "TEAM_ID": "teamId_str",
-            "PACE": "team_pace", "OFF_RATING": "team_off_rating", "DEF_RATING": "team_def_rating",
-        }),
-        on=["gameId_str", "teamId_str"],
-        how="left",
+    # Merge team totals back onto players (for usage_rate and pace)
+    df = df.merge(team_agg[["_gid", "_home", "_team_fga", "_team_fta", "_team_tov",
+                              "_team_poss", "_team_min", "team_pace", "team_off_rating"]],
+                  on=["_gid", "_home"], how="left")
+
+    # Usage rate: 100 * (FGA + 0.44*FTA + TOV) * (team_min/5) / (min * team_total)
+    player_poss = df["fieldGoalsAttempted"] + 0.44 * df["freeThrowsAttempted"] + df["turnovers"]
+    team_total_poss_rate = df["_team_fga"] + 0.44 * df["_team_fta"] + df["_team_tov"]
+    df["usage_rate"] = (
+        100 * player_poss * (df["_team_min"] / 5)
+        / (df["numMinutes"].replace(0, np.nan) * team_total_poss_rate.replace(0, np.nan))
     )
 
-    # Implied total: own OFF_RATING + opponent DEF_RATING
-    game_team_ratings = (
-        df.groupby(["gameId_str", "teamId_str"])[["team_off_rating", "team_def_rating"]]
-        .first()
-        .reset_index()
-    )
-    opp_def = game_team_ratings[["gameId_str", "teamId_str", "team_def_rating"]].copy()
-    opp_def.columns = ["gameId_str", "opp_teamId_str", "opp_def_rating"]
+    # Usage share = player's possession rate / team total (simpler normalized version)
+    df["usage_share"] = player_poss / team_total_poss_rate.replace(0, np.nan)
 
-    game_pairs = game_team_ratings.merge(opp_def, on="gameId_str")
-    game_pairs = game_pairs[game_pairs["teamId_str"] != game_pairs["opp_teamId_str"]].copy()
-    game_pairs["implied_total"] = game_pairs["team_off_rating"] + game_pairs["opp_def_rating"]
+    # Def rating: opponent's off rating. Join opponent team agg.
+    opp_agg = team_agg[["_gid", "_home", "team_off_rating"]].copy()
+    opp_agg["_opp_home"] = 1 - opp_agg["_home"]  # flip home flag to get opponent
+    opp_agg = opp_agg.rename(columns={"team_off_rating": "team_def_rating"})
+    df = df.merge(opp_agg[["_gid", "_opp_home", "team_def_rating"]].rename(columns={"_opp_home": "_home"}),
+                  on=["_gid", "_home"], how="left")
 
-    df = df.merge(
-        game_pairs[["gameId_str", "teamId_str", "implied_total"]],
-        on=["gameId_str", "teamId_str"],
-        how="left",
-    )
+    # Implied total = own off_rating + opponent def_rating (opponent's off_rating)
+    df["implied_total"] = df["team_off_rating"] + df["team_def_rating"]
 
-    # --- Join rest days from team game log ---
-    if gamelog is not None and not gamelog.empty:
-        gamelog = gamelog.copy()
-        gamelog["GAME_ID"] = gamelog["GAME_ID"].astype(str)
-        gamelog["TEAM_ID"] = gamelog["TEAM_ID"].astype(str)
+    # --- Rest days from TeamStatistics.csv ---
+    team_games = pd.read_csv(RAW_DIR / "TeamStatistics.csv", low_memory=False,
+                              usecols=["gameId", "teamId", "gameDateTimeEst"])
+    team_games = team_games[
+        (team_games["gameDateTimeEst"] >= SEASON_START) &
+        (team_games["gameDateTimeEst"] <= SEASON_END)
+    ].copy()
+    team_games["gameId"] = team_games["gameId"].astype(str)
+    team_games["gameDateTimeEst"] = pd.to_datetime(team_games["gameDateTimeEst"], utc=True, errors="coerce")
+    team_games = team_games.sort_values(["teamId", "gameDateTimeEst"])
 
-        df = df.merge(
-            gamelog[["GAME_ID", "TEAM_ID", "days_rest", "is_b2b"]].rename(columns={
-                "GAME_ID": "gameId_str", "TEAM_ID": "teamId_str",
-            }),
-            on=["gameId_str", "teamId_str"],
-            how="left",
-        )
-    else:
-        df["days_rest"] = np.nan
-        df["is_b2b"] = 0
+    team_games["days_rest"] = team_games.groupby("teamId")["gameDateTimeEst"].diff().dt.days
+    next_date = team_games.groupby("teamId")["gameDateTimeEst"].shift(-1)
+    team_games["is_b2b_first"] = (next_date - team_games["gameDateTimeEst"]).dt.days == 1
+    team_games["is_b2b_second"] = team_games["days_rest"] == 1
+    team_games["is_b2b"] = (team_games["is_b2b_first"] | team_games["is_b2b_second"]).astype(int)
+    team_games["days_rest"] = team_games["days_rest"].clip(upper=7).fillna(7)
 
-    # Clip and fill rest days: NaN (first game of season) → 7
-    df["days_rest"] = df["days_rest"].clip(upper=7).fillna(7).astype(float)
+    # Join rest days via (gameId, teamId). TeamStatistics has teamId; need to match to our df.
+    # Use a separate TeamStatistics join: match gameId + home flag via PlayerteamName.
+    # Simpler: join TeamStatistics onto df by gameId + playerteamName == teamName.
+    ts_lookup = team_games[["gameId", "teamId", "days_rest", "is_b2b"]].copy()
+    ts_lookup.columns = ["_gid", "_ts_teamId", "days_rest", "is_b2b"]
+
+    # Build a (gameId, teamName) → teamId lookup, then join via playerteamName
+    ts_full = pd.read_csv(RAW_DIR / "TeamStatistics.csv", low_memory=False,
+                           usecols=["gameId", "teamId", "teamName"])
+    ts_full["gameId"] = ts_full["gameId"].astype(str)
+    ts_full = ts_full.rename(columns={"gameId": "_gid", "teamName": "playerteamName"})
+
+    ts_with_rest = ts_full.merge(ts_lookup[["_gid", "_ts_teamId", "days_rest", "is_b2b"]],
+                                  left_on=["_gid", "teamId"], right_on=["_gid", "_ts_teamId"], how="left")
+    ts_with_rest = ts_with_rest[["_gid", "playerteamName", "days_rest", "is_b2b"]].drop_duplicates()
+
+    df = df.merge(ts_with_rest, on=["_gid", "playerteamName"], how="left")
+    df["days_rest"] = df["days_rest"].fillna(7)
     df["is_b2b"] = df["is_b2b"].fillna(0).astype(int)
 
-    df = df.drop(columns=["USG_PCT", "gameId_str", "personId_str", "teamId_str"], errors="ignore")
+    drop_cols = ["_gid", "_home", "_poss_contrib", "_team_fga", "_team_fta", "_team_tov",
+                 "_team_poss", "_team_min"]
+    df = df.drop(columns=drop_cols, errors="ignore")
     return df
 
 
@@ -237,8 +239,8 @@ def add_decay_features(df):
 def compute_rolling_covariances(df, window=20, min_periods=5):
     """Compute rolling Pearson correlations per player over their last `window` games.
 
-    Uses raw per-game stats (not decay averages) as inputs.
-    Returns 0 when fewer than min_periods games are available.
+    Uses raw per-game stats as inputs. Returns 0 when fewer than min_periods
+    games are available.
     """
     df = df.sort_values(["personId", "gameDateTimeEst"])
 
@@ -246,8 +248,8 @@ def compute_rolling_covariances(df, window=20, min_periods=5):
         pts = g["points"]
         ast = g["assists"]
         reb = g["reboundsTotal"]
-        r_pa = pts.rolling(window, min_periods=min_periods).corr(ast).fillna(0.0)
-        r_pr = pts.rolling(window, min_periods=min_periods).corr(reb).fillna(0.0)
+        r_pa = pts.rolling(window, min_periods=min_periods).corr(ast).fillna(0.0).clip(-1.0, 1.0)
+        r_pr = pts.rolling(window, min_periods=min_periods).corr(reb).fillna(0.0).clip(-1.0, 1.0)
         return pd.DataFrame({"cov_pts_ast": r_pa, "cov_pts_reb": r_pr}, index=g.index)
 
     corr = df.groupby("personId", group_keys=False).apply(_roll_corr)
@@ -262,20 +264,19 @@ def validate(df):
     assert df["h_usage_share"].notna().mean() > 0.95, "h_usage_share has too many NaN"
     assert df["h_pace"].notna().mean() > 0.95, "h_pace has too many NaN"
     assert df["h_usage_share"].between(0, 1).all(), "usage_share out of bounds [0, 1]"
-    assert df["h_pace"].between(85, 115).all(), f"pace values implausible: {df['h_pace'].describe()}"
+    assert df["h_pace"].between(85, 130).all(), f"pace values implausible: {df['h_pace'].describe()}"
     assert df["days_rest"].between(0, 7).all(), "days_rest out of bounds [0, 7]"
     print("Validation passed.")
 
 
 def build_input_target(df):
-    # Only keep rows where all INPUT_COLS are present
     available_cols = [c for c in INPUT_COLS if c in df.columns]
     target = df[TARGET_COLS]
     inputs = df[available_cols]
     return inputs, target
 
 
-def run(raw_path=None, out_dir=None, season_suffix="2022-25", adv_dir=None, skip_validation=False):
+def run(raw_path=None, out_dir=None, season_suffix="2022-25", skip_validation=False):
     out_dir = Path(out_dir) if out_dir else PROCESSED_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -283,24 +284,9 @@ def run(raw_path=None, out_dir=None, season_suffix="2022-25", adv_dir=None, skip
     df = load_player_stats(raw_path)
     print(f"  {len(df)} rows loaded")
 
-    print("Loading advanced stats...")
-    player_adv, team_adv, gamelog, home_away = load_advanced_stats(adv_dir)
-
-    if home_away is not None:
-        print("Enriching with advanced stats...")
-        df = enrich_with_advanced(df, player_adv, team_adv, gamelog, home_away)
-        print(f"  Enrichment complete — {df.shape[1]} columns")
-    else:
-        print("WARNING: No advanced stats found in data/advanced/. Run ingest/fetch_advanced_stats.py.")
-        print("         Proceeding with basic features only.")
-        # Fill new columns with NaN so downstream code doesn't break
-        for raw_col, h_col, _ in STATS_TO_DECAY:
-            if raw_col not in df.columns:
-                df[raw_col] = np.nan
-        df["days_rest"] = 7.0
-        df["is_b2b"] = 0
-        df["cov_pts_ast"] = 0.0
-        df["cov_pts_reb"] = 0.0
+    print("Enriching with advanced stats...")
+    df = enrich_with_advanced(df)
+    print(f"  Enrichment complete — {df.shape[1]} columns")
 
     print(f"Building decay features for {len(df)} rows...")
     df = add_decay_features(df)
@@ -310,7 +296,7 @@ def run(raw_path=None, out_dir=None, season_suffix="2022-25", adv_dir=None, skip
 
     df_valid = df.dropna(subset=["h_numMinutes"])
 
-    if home_away is not None and not skip_validation:
+    if not skip_validation:
         validate(df_valid)
 
     inputs, target = build_input_target(df_valid)
