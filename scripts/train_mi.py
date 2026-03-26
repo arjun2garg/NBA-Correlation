@@ -30,9 +30,9 @@ LAMBDA_MI_DEFAULT = 0.1
 N_Z_SAMPLES = 8
 FREE_BITS = 0.5
 WARMUP_EPOCHS = 15
-LAMBDA_WARMUP_EPOCHS = 20   # separate warmup for lambda_mi — prevents explosion at epoch 0
-GRAD_CLIP = 1.0             # prevents numerical instability at large lambda_mi values
-NUM_EPOCHS_DEFAULT = 60
+LAMBDA_WARMUP_EPOCHS = 60   # longer warmup prevents cumulative gradient destabilization
+GRAD_CLIP = 0.3             # tight clip: variance gradient can be large at high lambda
+NUM_EPOCHS_DEFAULT = 150
 BATCH_SIZE = 64
 DEVICE = "cpu"
 

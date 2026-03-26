@@ -67,7 +67,7 @@ def mi_variance_term(encoder, decoder, X_t, X_p, weights, n_z_samples=8):
 
 def train_epoch_mi(encoder, decoder, optimizer, loader,
                    beta=0.001, free_bits=0.0, lambda_mi=0.1,
-                   n_z_samples=8, device="cpu", grad_clip=1.0):
+                   n_z_samples=8, device="cpu", grad_clip=0.3):
     encoder.train()
     decoder.train()
     totals = {"loss": 0.0, "recon": 0.0, "kl": 0.0, "mi": 0.0}
