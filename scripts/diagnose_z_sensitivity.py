@@ -127,10 +127,31 @@ def diagnose(ckpt_path, num_samples=500, device="cpu", season_suffix="2019-26"):
     )
 
     # reload val loader with correct normalization from checkpoint
-    from src.data.dataset import build_tensors, NBADataset
+    from src.data.dataset import build_tensors, NBADataset, PLAYER_EXTRA_COLS
     from torch.utils.data import DataLoader
 
-    X_team_val, X_pl_val, weights_val, Y_val, lines_val = build_tensors(val_df)
+    # For attention model, re-merge PBP features to match training player_dim
+    extra_player_cols = cfg.get("extra_player_cols", None)
+    val_df_for_tensors = val_df
+    if extra_player_cols is not None and extra_player_cols != PLAYER_EXTRA_COLS:
+        import pandas as pd
+        pbp_feat_path = Path("data/processed/pbp_features.csv")
+        if pbp_feat_path.exists():
+            pbp_feats = pd.read_csv(pbp_feat_path)
+            pbp_feats["personId"] = pd.to_numeric(pbp_feats["personId"], errors="coerce").astype("int64")
+            pbp_feats["gameId"] = pd.to_numeric(pbp_feats["gameId"], errors="coerce").astype("int64")
+            val_df_for_tensors = val_df.copy()
+            val_df_for_tensors["personId"] = pd.to_numeric(val_df_for_tensors["personId"], errors="coerce").astype("int64")
+            val_df_for_tensors["gameId"] = pd.to_numeric(val_df_for_tensors["gameId"], errors="coerce").astype("int64")
+            val_df_for_tensors = val_df_for_tensors.merge(pbp_feats, on=["personId", "gameId"], how="left")
+            pbp_only = [c for c in extra_player_cols if c not in PLAYER_EXTRA_COLS]
+            val_df_for_tensors[pbp_only] = val_df_for_tensors[pbp_only].fillna(0.0)
+            print(f"  Merged PBP features for attention diagnostic ({len(val_df_for_tensors)} rows)")
+
+    X_team_val, X_pl_val, weights_val, Y_val, lines_val = build_tensors(
+        val_df_for_tensors,
+        extra_player_cols=extra_player_cols,
+    )
     Y_val_norm = (Y_val - ckpt["Y_mean"]) / ckpt["Y_std"]
     X_team_val_norm = (X_team_val - ckpt["Xt_mean"]) / ckpt["Xt_std"]
     X_pl_val_norm = (X_pl_val - ckpt["Xp_mean"]) / ckpt["Xp_std"]

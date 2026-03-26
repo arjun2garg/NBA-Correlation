@@ -1,0 +1,13 @@
+
+=== Z-Sensitivity Diagnostic ===
+Checkpoint: checkpoints/exp_attention/model_latest.pt
+Model type: attention
+Loading data (season 2019-26)...
+  val rows: 33892
+Traceback (most recent call last):
+  File "/Users/ag7/Documents/ML Projects/NBA Correlation/scripts/diagnose_z_sensitivity.py", line 283, in <module>
+    diagnose(
+  File "/Users/ag7/Documents/ML Projects/NBA Correlation/scripts/diagnose_z_sensitivity.py", line 136, in diagnose
+    X_pl_val_norm = (X_pl_val - ckpt["Xp_mean"]) / ckpt["Xp_std"]
+                     ~~~~~~~~~^~~~~~~~~~~~~~~~~
+RuntimeError: The size of tensor a (24) must match the size of tensor b (26) at non-singleton dimension 2

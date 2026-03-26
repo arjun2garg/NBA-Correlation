@@ -1,0 +1,179 @@
+TwoStage Config: BETA=0.001, ALPHA=0.5, epochs=150
+Loading player data (season 2019-26)...
+  170772 rows loaded
+  train=136880  val=33892
+Loading game outcomes...
+Game outcomes loaded: 4,995 games, cols=['gameId', 'home_score', 'away_score', 'home_pace', 'home_poss', 'away_pace', 'away_poss']
+  4995 games with outcomes
+Building loaders (raw targets)...
+  done
+  team_dim=256  player_dim=24
+--no-resume — starting from epoch 0.
+Training two-stage model epochs 0–149
+Epoch 000/149 | beta 0.00000 | train recon 0.3110  game_mse 0.0083  kl/dim 0.832 | val recon 0.1875  game_mse nan  kl/dim 1.448
+Epoch 001/149 | beta 0.00007 | train recon 0.2046  game_mse 0.0007  kl/dim 1.277 | val recon 0.1743  game_mse nan  kl/dim 1.155
+Epoch 002/149 | beta 0.00013 | train recon 0.1887  game_mse 0.0007  kl/dim 1.004 | val recon 0.1679  game_mse nan  kl/dim 0.879
+Epoch 003/149 | beta 0.00020 | train recon 0.1813  game_mse 0.0007  kl/dim 0.781 | val recon 0.1645  game_mse nan  kl/dim 0.682
+Epoch 004/149 | beta 0.00027 | train recon 0.1773  game_mse 0.0006  kl/dim 0.664 | val recon 0.1644  game_mse nan  kl/dim 0.567
+Epoch 005/149 | beta 0.00033 | train recon 0.1756  game_mse 0.0005  kl/dim 0.590 | val recon 0.1638  game_mse nan  kl/dim 0.498
+Epoch 006/149 | beta 0.00040 | train recon 0.1727  game_mse 0.0004  kl/dim 0.569 | val recon 0.1612  game_mse nan  kl/dim 0.489
+Epoch 007/149 | beta 0.00047 | train recon 0.1710  game_mse 0.0003  kl/dim 0.546 | val recon 0.1608  game_mse nan  kl/dim 0.449
+Epoch 008/149 | beta 0.00053 | train recon 0.1677  game_mse 0.0003  kl/dim 0.535 | val recon 0.1589  game_mse nan  kl/dim 0.450
+Epoch 009/149 | beta 0.00060 | train recon 0.1675  game_mse 0.0002  kl/dim 0.531 | val recon 0.1584  game_mse nan  kl/dim 0.423
+Epoch 010/149 | beta 0.00067 | train recon 0.1651  game_mse 0.0002  kl/dim 0.519 | val recon 0.1580  game_mse nan  kl/dim 0.432
+  [diag] P(over|z) std: mean=0.0195  std=0.0087  (target >0.05)
+Epoch 011/149 | beta 0.00073 | train recon 0.1641  game_mse 0.0002  kl/dim 0.520 | val recon 0.1574  game_mse nan  kl/dim 0.405
+Epoch 012/149 | beta 0.00080 | train recon 0.1634  game_mse 0.0001  kl/dim 0.514 | val recon 0.1579  game_mse nan  kl/dim 0.366
+Epoch 013/149 | beta 0.00087 | train recon 0.1620  game_mse 0.0001  kl/dim 0.511 | val recon 0.1558  game_mse nan  kl/dim 0.436
+Epoch 014/149 | beta 0.00093 | train recon 0.1616  game_mse 0.0001  kl/dim 0.511 | val recon 0.1580  game_mse nan  kl/dim 0.375
+Epoch 015/149 | beta 0.00100 | train recon 0.1610  game_mse 0.0001  kl/dim 0.510 | val recon 0.1569  game_mse nan  kl/dim 0.370
+Epoch 016/149 | beta 0.00100 | train recon 0.1591  game_mse 0.0001  kl/dim 0.509 | val recon 0.1557  game_mse nan  kl/dim 0.378
+Epoch 017/149 | beta 0.00100 | train recon 0.1577  game_mse 0.0001  kl/dim 0.508 | val recon 0.1568  game_mse nan  kl/dim 0.364
+Epoch 018/149 | beta 0.00100 | train recon 0.1575  game_mse 0.0001  kl/dim 0.512 | val recon 0.1561  game_mse nan  kl/dim 0.376
+Epoch 019/149 | beta 0.00100 | train recon 0.1560  game_mse 0.0001  kl/dim 0.508 | val recon 0.1571  game_mse nan  kl/dim 0.304
+Epoch 020/149 | beta 0.00100 | train recon 0.1567  game_mse 0.0001  kl/dim 0.508 | val recon 0.1562  game_mse nan  kl/dim 0.383
+  [diag] P(over|z) std: mean=0.0194  std=0.0100  (target >0.05)
+Epoch 021/149 | beta 0.00100 | train recon 0.1556  game_mse 0.0001  kl/dim 0.506 | val recon 0.1553  game_mse nan  kl/dim 0.360
+Epoch 022/149 | beta 0.00100 | train recon 0.1544  game_mse 0.0001  kl/dim 0.507 | val recon 0.1550  game_mse nan  kl/dim 0.381
+Epoch 023/149 | beta 0.00100 | train recon 0.1535  game_mse 0.0000  kl/dim 0.508 | val recon 0.1577  game_mse nan  kl/dim 0.338
+Epoch 024/149 | beta 0.00100 | train recon 0.1539  game_mse 0.0001  kl/dim 0.508 | val recon 0.1558  game_mse nan  kl/dim 0.328
+Epoch 025/149 | beta 0.00100 | train recon 0.1533  game_mse 0.0000  kl/dim 0.509 | val recon 0.1572  game_mse nan  kl/dim 0.304
+Epoch 026/149 | beta 0.00100 | train recon 0.1528  game_mse 0.0001  kl/dim 0.508 | val recon 0.1560  game_mse nan  kl/dim 0.335
+Epoch 027/149 | beta 0.00100 | train recon 0.1524  game_mse 0.0000  kl/dim 0.509 | val recon 0.1557  game_mse nan  kl/dim 0.354
+Epoch 028/149 | beta 0.00100 | train recon 0.1509  game_mse 0.0000  kl/dim 0.508 | val recon 0.1550  game_mse nan  kl/dim 0.330
+Epoch 029/149 | beta 0.00100 | train recon 0.1523  game_mse 0.0000  kl/dim 0.506 | val recon 0.1548  game_mse nan  kl/dim 0.359
+Epoch 030/149 | beta 0.00100 | train recon 0.1525  game_mse 0.0000  kl/dim 0.509 | val recon 0.1554  game_mse nan  kl/dim 0.326
+  [diag] P(over|z) std: mean=0.0211  std=0.0107  (target >0.05)
+Epoch 031/149 | beta 0.00100 | train recon 0.1501  game_mse 0.0000  kl/dim 0.507 | val recon 0.1555  game_mse nan  kl/dim 0.321
+Epoch 032/149 | beta 0.00100 | train recon 0.1495  game_mse 0.0000  kl/dim 0.508 | val recon 0.1554  game_mse nan  kl/dim 0.334
+Epoch 033/149 | beta 0.00100 | train recon 0.1485  game_mse 0.0000  kl/dim 0.509 | val recon 0.1569  game_mse nan  kl/dim 0.298
+Epoch 034/149 | beta 0.00100 | train recon 0.1495  game_mse 0.0000  kl/dim 0.508 | val recon 0.1564  game_mse nan  kl/dim 0.334
+Epoch 035/149 | beta 0.00100 | train recon 0.1488  game_mse 0.0000  kl/dim 0.509 | val recon 0.1555  game_mse nan  kl/dim 0.340
+Epoch 036/149 | beta 0.00100 | train recon 0.1481  game_mse 0.0000  kl/dim 0.510 | val recon 0.1565  game_mse nan  kl/dim 0.307
+Epoch 037/149 | beta 0.00100 | train recon 0.1483  game_mse 0.0000  kl/dim 0.508 | val recon 0.1563  game_mse nan  kl/dim 0.330
+Epoch 038/149 | beta 0.00100 | train recon 0.1480  game_mse 0.0000  kl/dim 0.510 | val recon 0.1556  game_mse nan  kl/dim 0.309
+Epoch 039/149 | beta 0.00100 | train recon 0.1470  game_mse 0.0000  kl/dim 0.508 | val recon 0.1562  game_mse nan  kl/dim 0.324
+Epoch 040/149 | beta 0.00100 | train recon 0.1481  game_mse 0.0000  kl/dim 0.509 | val recon 0.1571  game_mse nan  kl/dim 0.322
+  [diag] P(over|z) std: mean=0.0211  std=0.0112  (target >0.05)
+Epoch 041/149 | beta 0.00100 | train recon 0.1470  game_mse 0.0000  kl/dim 0.508 | val recon 0.1570  game_mse nan  kl/dim 0.301
+Epoch 042/149 | beta 0.00100 | train recon 0.1473  game_mse 0.0000  kl/dim 0.509 | val recon 0.1570  game_mse nan  kl/dim 0.317
+Epoch 043/149 | beta 0.00100 | train recon 0.1471  game_mse 0.0000  kl/dim 0.508 | val recon 0.1558  game_mse nan  kl/dim 0.322
+Epoch 044/149 | beta 0.00100 | train recon 0.1461  game_mse 0.0000  kl/dim 0.509 | val recon 0.1571  game_mse nan  kl/dim 0.319
+Epoch 045/149 | beta 0.00100 | train recon 0.1465  game_mse 0.0000  kl/dim 0.509 | val recon 0.1569  game_mse nan  kl/dim 0.329
+Epoch 046/149 | beta 0.00100 | train recon 0.1463  game_mse 0.0000  kl/dim 0.509 | val recon 0.1563  game_mse nan  kl/dim 0.382
+Epoch 047/149 | beta 0.00100 | train recon 0.1474  game_mse 0.0000  kl/dim 0.511 | val recon 0.1559  game_mse nan  kl/dim 0.328
+Epoch 048/149 | beta 0.00100 | train recon 0.1458  game_mse 0.0000  kl/dim 0.510 | val recon 0.1564  game_mse nan  kl/dim 0.329
+Epoch 049/149 | beta 0.00100 | train recon 0.1455  game_mse 0.0000  kl/dim 0.509 | val recon 0.1560  game_mse nan  kl/dim 0.329
+Epoch 050/149 | beta 0.00100 | train recon 0.1442  game_mse 0.0000  kl/dim 0.510 | val recon 0.1568  game_mse nan  kl/dim 0.312
+  [diag] P(over|z) std: mean=0.0219  std=0.0117  (target >0.05)
+Epoch 051/149 | beta 0.00100 | train recon 0.1437  game_mse 0.0000  kl/dim 0.509 | val recon 0.1560  game_mse nan  kl/dim 0.347
+Epoch 052/149 | beta 0.00100 | train recon 0.1440  game_mse 0.0000  kl/dim 0.510 | val recon 0.1564  game_mse nan  kl/dim 0.305
+Epoch 053/149 | beta 0.00100 | train recon 0.1447  game_mse 0.0000  kl/dim 0.510 | val recon 0.1574  game_mse nan  kl/dim 0.299
+Epoch 054/149 | beta 0.00100 | train recon 0.1437  game_mse 0.0000  kl/dim 0.512 | val recon 0.1572  game_mse nan  kl/dim 0.300
+Epoch 055/149 | beta 0.00100 | train recon 0.1438  game_mse 0.0000  kl/dim 0.509 | val recon 0.1560  game_mse nan  kl/dim 0.311
+Epoch 056/149 | beta 0.00100 | train recon 0.1423  game_mse 0.0000  kl/dim 0.513 | val recon 0.1560  game_mse nan  kl/dim 0.346
+Epoch 057/149 | beta 0.00100 | train recon 0.1420  game_mse 0.0000  kl/dim 0.512 | val recon 0.1561  game_mse nan  kl/dim 0.314
+Epoch 058/149 | beta 0.00100 | train recon 0.1425  game_mse 0.0000  kl/dim 0.509 | val recon 0.1578  game_mse nan  kl/dim 0.309
+Epoch 059/149 | beta 0.00100 | train recon 0.1415  game_mse 0.0000  kl/dim 0.509 | val recon 0.1567  game_mse nan  kl/dim 0.334
+Epoch 060/149 | beta 0.00100 | train recon 0.1427  game_mse 0.0000  kl/dim 0.511 | val recon 0.1570  game_mse nan  kl/dim 0.290
+  [diag] P(over|z) std: mean=0.0226  std=0.0119  (target >0.05)
+Epoch 061/149 | beta 0.00100 | train recon 0.1427  game_mse 0.0000  kl/dim 0.511 | val recon 0.1580  game_mse nan  kl/dim 0.286
+Epoch 062/149 | beta 0.00100 | train recon 0.1411  game_mse 0.0000  kl/dim 0.508 | val recon 0.1581  game_mse nan  kl/dim 0.316
+Epoch 063/149 | beta 0.00100 | train recon 0.1410  game_mse 0.0000  kl/dim 0.511 | val recon 0.1574  game_mse nan  kl/dim 0.326
+Epoch 064/149 | beta 0.00100 | train recon 0.1412  game_mse 0.0000  kl/dim 0.513 | val recon 0.1590  game_mse nan  kl/dim 0.293
+Epoch 065/149 | beta 0.00100 | train recon 0.1412  game_mse 0.0000  kl/dim 0.511 | val recon 0.1577  game_mse nan  kl/dim 0.314
+Epoch 066/149 | beta 0.00100 | train recon 0.1407  game_mse 0.0000  kl/dim 0.511 | val recon 0.1573  game_mse nan  kl/dim 0.285
+Epoch 067/149 | beta 0.00100 | train recon 0.1406  game_mse 0.0000  kl/dim 0.509 | val recon 0.1576  game_mse nan  kl/dim 0.335
+Epoch 068/149 | beta 0.00100 | train recon 0.1412  game_mse 0.0000  kl/dim 0.512 | val recon 0.1579  game_mse nan  kl/dim 0.318
+Epoch 069/149 | beta 0.00100 | train recon 0.1387  game_mse 0.0000  kl/dim 0.510 | val recon 0.1571  game_mse nan  kl/dim 0.301
+Epoch 070/149 | beta 0.00100 | train recon 0.1408  game_mse 0.0000  kl/dim 0.513 | val recon 0.1576  game_mse nan  kl/dim 0.319
+  [diag] P(over|z) std: mean=0.0227  std=0.0119  (target >0.05)
+Epoch 071/149 | beta 0.00100 | train recon 0.1394  game_mse 0.0000  kl/dim 0.511 | val recon 0.1572  game_mse nan  kl/dim 0.316
+Epoch 072/149 | beta 0.00100 | train recon 0.1391  game_mse 0.0000  kl/dim 0.510 | val recon 0.1583  game_mse nan  kl/dim 0.296
+Epoch 073/149 | beta 0.00100 | train recon 0.1393  game_mse 0.0000  kl/dim 0.512 | val recon 0.1578  game_mse nan  kl/dim 0.293
+Epoch 074/149 | beta 0.00100 | train recon 0.1404  game_mse 0.0000  kl/dim 0.512 | val recon 0.1583  game_mse nan  kl/dim 0.306
+Epoch 075/149 | beta 0.00100 | train recon 0.1387  game_mse 0.0000  kl/dim 0.510 | val recon 0.1581  game_mse nan  kl/dim 0.299
+Epoch 076/149 | beta 0.00100 | train recon 0.1387  game_mse 0.0000  kl/dim 0.510 | val recon 0.1577  game_mse nan  kl/dim 0.322
+Epoch 077/149 | beta 0.00100 | train recon 0.1385  game_mse 0.0000  kl/dim 0.511 | val recon 0.1568  game_mse nan  kl/dim 0.322
+Epoch 078/149 | beta 0.00100 | train recon 0.1383  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.309
+Epoch 079/149 | beta 0.00100 | train recon 0.1405  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.330
+Epoch 080/149 | beta 0.00100 | train recon 0.1386  game_mse 0.0000  kl/dim 0.512 | val recon 0.1567  game_mse nan  kl/dim 0.318
+  [diag] P(over|z) std: mean=0.0234  std=0.0127  (target >0.05)
+Epoch 081/149 | beta 0.00100 | train recon 0.1382  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.296
+Epoch 082/149 | beta 0.00100 | train recon 0.1361  game_mse 0.0000  kl/dim 0.513 | val recon 0.1576  game_mse nan  kl/dim 0.295
+Epoch 083/149 | beta 0.00100 | train recon 0.1374  game_mse 0.0000  kl/dim 0.510 | val recon 0.1586  game_mse nan  kl/dim 0.329
+Epoch 084/149 | beta 0.00100 | train recon 0.1374  game_mse 0.0000  kl/dim 0.510 | val recon 0.1572  game_mse nan  kl/dim 0.314
+Epoch 085/149 | beta 0.00100 | train recon 0.1388  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.318
+Epoch 086/149 | beta 0.00100 | train recon 0.1366  game_mse 0.0000  kl/dim 0.511 | val recon 0.1589  game_mse nan  kl/dim 0.311
+Epoch 087/149 | beta 0.00100 | train recon 0.1379  game_mse 0.0000  kl/dim 0.510 | val recon 0.1567  game_mse nan  kl/dim 0.326
+Epoch 088/149 | beta 0.00100 | train recon 0.1367  game_mse 0.0000  kl/dim 0.513 | val recon 0.1572  game_mse nan  kl/dim 0.310
+Epoch 089/149 | beta 0.00100 | train recon 0.1381  game_mse 0.0000  kl/dim 0.513 | val recon 0.1570  game_mse nan  kl/dim 0.316
+Epoch 090/149 | beta 0.00100 | train recon 0.1385  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.325
+  [diag] P(over|z) std: mean=0.0231  std=0.0120  (target >0.05)
+Epoch 091/149 | beta 0.00100 | train recon 0.1358  game_mse 0.0000  kl/dim 0.514 | val recon 0.1574  game_mse nan  kl/dim 0.318
+Epoch 092/149 | beta 0.00100 | train recon 0.1366  game_mse 0.0000  kl/dim 0.513 | val recon 0.1569  game_mse nan  kl/dim 0.308
+Epoch 093/149 | beta 0.00100 | train recon 0.1376  game_mse 0.0000  kl/dim 0.511 | val recon 0.1562  game_mse nan  kl/dim 0.313
+Epoch 094/149 | beta 0.00100 | train recon 0.1375  game_mse 0.0000  kl/dim 0.513 | val recon 0.1575  game_mse nan  kl/dim 0.311
+Epoch 095/149 | beta 0.00100 | train recon 0.1354  game_mse 0.0000  kl/dim 0.512 | val recon 0.1594  game_mse nan  kl/dim 0.318
+Epoch 096/149 | beta 0.00100 | train recon 0.1374  game_mse 0.0000  kl/dim 0.513 | val recon 0.1592  game_mse nan  kl/dim 0.302
+Epoch 097/149 | beta 0.00100 | train recon 0.1365  game_mse 0.0000  kl/dim 0.511 | val recon 0.1583  game_mse nan  kl/dim 0.321
+Epoch 098/149 | beta 0.00100 | train recon 0.1374  game_mse 0.0000  kl/dim 0.513 | val recon 0.1584  game_mse nan  kl/dim 0.311
+Epoch 099/149 | beta 0.00100 | train recon 0.1369  game_mse 0.0000  kl/dim 0.512 | val recon 0.1582  game_mse nan  kl/dim 0.325
+Epoch 100/149 | beta 0.00100 | train recon 0.1397  game_mse 0.0000  kl/dim 0.514 | val recon 0.1577  game_mse nan  kl/dim 0.322
+  [diag] P(over|z) std: mean=0.0235  std=0.0124  (target >0.05)
+Epoch 101/149 | beta 0.00100 | train recon 0.1371  game_mse 0.0000  kl/dim 0.512 | val recon 0.1579  game_mse nan  kl/dim 0.294
+Epoch 102/149 | beta 0.00100 | train recon 0.1365  game_mse 0.0000  kl/dim 0.511 | val recon 0.1581  game_mse nan  kl/dim 0.315
+Epoch 103/149 | beta 0.00100 | train recon 0.1367  game_mse 0.0000  kl/dim 0.513 | val recon 0.1583  game_mse nan  kl/dim 0.303
+Epoch 104/149 | beta 0.00100 | train recon 0.1354  game_mse 0.0000  kl/dim 0.513 | val recon 0.1580  game_mse nan  kl/dim 0.307
+Epoch 105/149 | beta 0.00100 | train recon 0.1343  game_mse 0.0000  kl/dim 0.512 | val recon 0.1579  game_mse nan  kl/dim 0.326
+Epoch 106/149 | beta 0.00100 | train recon 0.1349  game_mse 0.0000  kl/dim 0.513 | val recon 0.1580  game_mse nan  kl/dim 0.331
+Epoch 107/149 | beta 0.00100 | train recon 0.1359  game_mse 0.0000  kl/dim 0.514 | val recon 0.1587  game_mse nan  kl/dim 0.301
+Epoch 108/149 | beta 0.00100 | train recon 0.1347  game_mse 0.0000  kl/dim 0.512 | val recon 0.1582  game_mse nan  kl/dim 0.309
+Epoch 109/149 | beta 0.00100 | train recon 0.1362  game_mse 0.0000  kl/dim 0.511 | val recon 0.1584  game_mse nan  kl/dim 0.302
+Epoch 110/149 | beta 0.00100 | train recon 0.1342  game_mse 0.0000  kl/dim 0.513 | val recon 0.1584  game_mse nan  kl/dim 0.302
+  [diag] P(over|z) std: mean=0.0235  std=0.0127  (target >0.05)
+Epoch 111/149 | beta 0.00100 | train recon 0.1340  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.310
+Epoch 112/149 | beta 0.00100 | train recon 0.1350  game_mse 0.0000  kl/dim 0.512 | val recon 0.1588  game_mse nan  kl/dim 0.320
+Epoch 113/149 | beta 0.00100 | train recon 0.1349  game_mse 0.0000  kl/dim 0.513 | val recon 0.1586  game_mse nan  kl/dim 0.310
+Epoch 114/149 | beta 0.00100 | train recon 0.1339  game_mse 0.0000  kl/dim 0.512 | val recon 0.1576  game_mse nan  kl/dim 0.318
+Epoch 115/149 | beta 0.00100 | train recon 0.1348  game_mse 0.0000  kl/dim 0.512 | val recon 0.1577  game_mse nan  kl/dim 0.324
+Epoch 116/149 | beta 0.00100 | train recon 0.1351  game_mse 0.0000  kl/dim 0.514 | val recon 0.1587  game_mse nan  kl/dim 0.304
+Epoch 117/149 | beta 0.00100 | train recon 0.1349  game_mse 0.0000  kl/dim 0.511 | val recon 0.1582  game_mse nan  kl/dim 0.319
+Epoch 118/149 | beta 0.00100 | train recon 0.1342  game_mse 0.0000  kl/dim 0.514 | val recon 0.1586  game_mse nan  kl/dim 0.299
+Epoch 119/149 | beta 0.00100 | train recon 0.1335  game_mse 0.0000  kl/dim 0.516 | val recon 0.1603  game_mse nan  kl/dim 0.303
+Epoch 120/149 | beta 0.00100 | train recon 0.1350  game_mse 0.0000  kl/dim 0.514 | val recon 0.1597  game_mse nan  kl/dim 0.310
+  [diag] P(over|z) std: mean=0.0236  std=0.0129  (target >0.05)
+Epoch 121/149 | beta 0.00100 | train recon 0.1335  game_mse 0.0000  kl/dim 0.514 | val recon 0.1591  game_mse nan  kl/dim 0.306
+Epoch 122/149 | beta 0.00100 | train recon 0.1329  game_mse 0.0000  kl/dim 0.512 | val recon 0.1589  game_mse nan  kl/dim 0.316
+Epoch 123/149 | beta 0.00100 | train recon 0.1329  game_mse 0.0000  kl/dim 0.514 | val recon 0.1592  game_mse nan  kl/dim 0.312
+Epoch 124/149 | beta 0.00100 | train recon 0.1340  game_mse 0.0000  kl/dim 0.513 | val recon 0.1600  game_mse nan  kl/dim 0.299
+Epoch 125/149 | beta 0.00100 | train recon 0.1340  game_mse 0.0000  kl/dim 0.513 | val recon 0.1596  game_mse nan  kl/dim 0.310
+Epoch 126/149 | beta 0.00100 | train recon 0.1348  game_mse 0.0000  kl/dim 0.514 | val recon 0.1582  game_mse nan  kl/dim 0.318
+Epoch 127/149 | beta 0.00100 | train recon 0.1321  game_mse 0.0000  kl/dim 0.514 | val recon 0.1583  game_mse nan  kl/dim 0.323
+Epoch 128/149 | beta 0.00100 | train recon 0.1334  game_mse 0.0000  kl/dim 0.515 | val recon 0.1598  game_mse nan  kl/dim 0.315
+Epoch 129/149 | beta 0.00100 | train recon 0.1340  game_mse 0.0000  kl/dim 0.512 | val recon 0.1592  game_mse nan  kl/dim 0.322
+Epoch 130/149 | beta 0.00100 | train recon 0.1325  game_mse 0.0000  kl/dim 0.513 | val recon 0.1601  game_mse nan  kl/dim 0.316
+  [diag] P(over|z) std: mean=0.0247  std=0.0133  (target >0.05)
+Epoch 131/149 | beta 0.00100 | train recon 0.1319  game_mse 0.0000  kl/dim 0.514 | val recon 0.1604  game_mse nan  kl/dim 0.317
+Epoch 132/149 | beta 0.00100 | train recon 0.1325  game_mse 0.0000  kl/dim 0.512 | val recon 0.1593  game_mse nan  kl/dim 0.316
+Epoch 133/149 | beta 0.00100 | train recon 0.1328  game_mse 0.0000  kl/dim 0.514 | val recon 0.1595  game_mse nan  kl/dim 0.303
+Epoch 134/149 | beta 0.00100 | train recon 0.1347  game_mse 0.0000  kl/dim 0.515 | val recon 0.1581  game_mse nan  kl/dim 0.312
+Epoch 135/149 | beta 0.00100 | train recon 0.1330  game_mse 0.0000  kl/dim 0.513 | val recon 0.1605  game_mse nan  kl/dim 0.311
+Epoch 136/149 | beta 0.00100 | train recon 0.1336  game_mse 0.0000  kl/dim 0.514 | val recon 0.1589  game_mse nan  kl/dim 0.316
+Epoch 137/149 | beta 0.00100 | train recon 0.1348  game_mse 0.0000  kl/dim 0.518 | val recon 0.1584  game_mse nan  kl/dim 0.322
+Epoch 138/149 | beta 0.00100 | train recon 0.1335  game_mse 0.0000  kl/dim 0.512 | val recon 0.1596  game_mse nan  kl/dim 0.318
+Epoch 139/149 | beta 0.00100 | train recon 0.1316  game_mse 0.0000  kl/dim 0.514 | val recon 0.1597  game_mse nan  kl/dim 0.324
+Epoch 140/149 | beta 0.00100 | train recon 0.1335  game_mse 0.0000  kl/dim 0.515 | val recon 0.1590  game_mse nan  kl/dim 0.319
+  [diag] P(over|z) std: mean=0.0236  std=0.0130  (target >0.05)
+Epoch 141/149 | beta 0.00100 | train recon 0.1322  game_mse 0.0000  kl/dim 0.513 | val recon 0.1604  game_mse nan  kl/dim 0.321
+Epoch 142/149 | beta 0.00100 | train recon 0.1313  game_mse 0.0000  kl/dim 0.515 | val recon 0.1588  game_mse nan  kl/dim 0.321
+Epoch 143/149 | beta 0.00100 | train recon 0.1325  game_mse 0.0000  kl/dim 0.514 | val recon 0.1596  game_mse nan  kl/dim 0.322
+Epoch 144/149 | beta 0.00100 | train recon 0.1334  game_mse 0.0000  kl/dim 0.516 | val recon 0.1597  game_mse nan  kl/dim 0.305
+Epoch 145/149 | beta 0.00100 | train recon 0.1327  game_mse 0.0000  kl/dim 0.514 | val recon 0.1607  game_mse nan  kl/dim 0.307
+Epoch 146/149 | beta 0.00100 | train recon 0.1340  game_mse 0.0000  kl/dim 0.513 | val recon 0.1607  game_mse nan  kl/dim 0.304
+Epoch 147/149 | beta 0.00100 | train recon 0.1323  game_mse 0.0000  kl/dim 0.513 | val recon 0.1603  game_mse nan  kl/dim 0.328
+Epoch 148/149 | beta 0.00100 | train recon 0.1319  game_mse 0.0000  kl/dim 0.513 | val recon 0.1594  game_mse nan  kl/dim 0.316
+Epoch 149/149 | beta 0.00100 | train recon 0.1310  game_mse 0.0000  kl/dim 0.513 | val recon 0.1604  game_mse nan  kl/dim 0.321
+
+Final P(over|z) std: mean=0.0238  std=0.0130
+Two-stage training complete.

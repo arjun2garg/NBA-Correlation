@@ -1,0 +1,10 @@
+[23:25:06] === Overnight experiments starting ===
+[23:25:06] === Tracks A (attention) and B (twostage) starting in parallel ===
+[23:28:28] Track A (attention) done
+[23:28:28] Track B (twostage) done
+[23:28:28] === Track C1: MI sweep lambda=0.5 beta=0.001 ===
+[23:31:45] MI lambda=0.5 done
+[23:31:45] === Track C2: MI sweep lambda=1.0 beta=0.01 ===
+[23:35:01] MI lambda=1.0 done
+[23:35:01] === Running z-sensitivity diagnostics ===
+[23:35:01] Diagnosing exp_attention...
