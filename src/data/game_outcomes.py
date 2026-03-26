@@ -3,10 +3,11 @@ Track B: Build per-game outcome vectors for two-stage VAE.
 
 Outcome vector (6-dim): [home_score, away_score, home_pace, away_pace, home_poss, away_poss]
 
-Sources:
-  - data/raw/TeamStatistics.csv  → home_score, away_score
-  - data/raw/PlayerStatisticsAdvanced.csv → pace, poss per team per game
-    (take first player row per team-game as the team estimate)
+Source: data/raw/TeamStatistics.csv only — same gameId format as input_data.
+Pace and possessions are estimated from box score stats in TeamStatistics.
+
+Possession estimate: poss ≈ FGA + 0.44*FTA + TOV  (Dean Oliver formula, per team)
+Pace = mean_possessions_per_team * 48 / numMinutes
 """
 
 import pandas as pd
@@ -23,35 +24,41 @@ def load_game_outcomes(raw_dir=RAW_DIR):
       gameId, home_score, away_score, home_pace, away_pace, home_poss, away_poss
     One row per game.
     """
-    # --- Scores from TeamStatistics ---
-    ts = pd.read_csv(raw_dir / "TeamStatistics.csv",
-                     usecols=["gameId", "home", "teamScore", "opponentScore"])
-    home_ts = ts[ts["home"] == 1][["gameId", "teamScore", "opponentScore"]].rename(
-        columns={"teamScore": "home_score", "opponentScore": "away_score"}
+    cols = [
+        "gameId", "home", "teamScore", "opponentScore",
+        "fieldGoalsAttempted", "freeThrowsAttempted", "turnovers", "numMinutes",
+    ]
+    ts = pd.read_csv(raw_dir / "TeamStatistics.csv", usecols=cols)
+    ts = ts.dropna(subset=["teamScore", "numMinutes"])
+
+    # Estimate possessions: FGA + 0.44*FTA + TOV (simple estimate without ORB)
+    ts["poss_est"] = (
+        ts["fieldGoalsAttempted"]
+        + 0.44 * ts["freeThrowsAttempted"]
+        + ts["turnovers"]
     )
-    # drop duplicates (some games appear twice if home/away both listed)
-    home_ts = home_ts.drop_duplicates(subset=["gameId"])
+    # numMinutes is total team minutes (5 players × minutes); use it for pace
+    # pace = poss_per_48_per_team = poss / (numMinutes / (5 * 48)) * 48
+    # Simplify: pace = poss * 240 / numMinutes (if numMinutes is team total = 5×game_minutes)
+    # But TeamStatistics numMinutes = actual game minutes played (usually 240 for a 48-min game)
+    ts["pace_est"] = ts["poss_est"] * 48.0 / (ts["numMinutes"] / 5.0 + 1e-6)
 
-    # --- Pace & possessions from PlayerStatisticsAdvanced ---
-    adv_cols = ["gameId", "teamId", "home", "pace", "poss"]
-    adv = pd.read_csv(raw_dir / "PlayerStatisticsAdvanced.csv", usecols=adv_cols)
-    adv = adv.dropna(subset=["pace", "poss"])
-
-    # Take first row per (gameId, teamId) as team estimate
-    adv_team = adv.groupby(["gameId", "teamId", "home"], as_index=False).first()
-
-    home_adv = adv_team[adv_team["home"] == 1][["gameId", "pace", "poss"]].rename(
-        columns={"pace": "home_pace", "poss": "home_poss"}
+    home = ts[ts["home"] == 1][["gameId", "teamScore", "opponentScore", "pace_est", "poss_est"]].rename(
+        columns={
+            "teamScore": "home_score",
+            "opponentScore": "away_score",
+            "pace_est": "home_pace",
+            "poss_est": "home_poss",
+        }
     ).drop_duplicates(subset=["gameId"])
 
-    away_adv = adv_team[adv_team["home"] == 0][["gameId", "pace", "poss"]].rename(
-        columns={"pace": "away_pace", "poss": "away_poss"}
+    away = ts[ts["home"] == 0][["gameId", "pace_est", "poss_est"]].rename(
+        columns={"pace_est": "away_pace", "poss_est": "away_poss"}
     ).drop_duplicates(subset=["gameId"])
 
-    # Merge everything
-    outcomes = home_ts.merge(home_adv, on="gameId", how="inner")
-    outcomes = outcomes.merge(away_adv, on="gameId", how="inner")
+    outcomes = home.merge(away, on="gameId", how="inner")
     outcomes = outcomes.dropna()
+    outcomes = outcomes[["gameId"] + OUTCOME_COLS]
 
     print(f"Game outcomes loaded: {len(outcomes):,} games, cols={list(outcomes.columns)}")
     return outcomes
@@ -65,10 +72,13 @@ def normalize_outcomes(outcomes_df, train_game_ids=None):
     Normalize outcome columns using train-set stats.
 
     Returns (normalized_df, stats_dict) where stats_dict has mean/std for each col.
-    If train_game_ids is None, uses all rows.
+    If train_game_ids is None or no overlap found, falls back to using all rows.
     """
     if train_game_ids is not None:
         train = outcomes_df[outcomes_df["gameId"].isin(train_game_ids)]
+        if len(train) == 0:
+            # Fallback: no overlap between train_game_ids and outcomes — use all
+            train = outcomes_df
     else:
         train = outcomes_df
 
