@@ -85,9 +85,11 @@ def _safe_player_feats(player_df, stat_cols, extra_cols):
 
 
 def build_game(game_df, max_players, n_starters=N_STARTERS, n_players_per_team=N_PLAYERS_PER_TEAM,
-               stat_cols=None, target_cols=None, minutes_col=MINUTES_COL):
+               stat_cols=None, target_cols=None, minutes_col=MINUTES_COL,
+               extra_player_cols=None, raw_targets=False):
     stat_cols = stat_cols or STAT_COLS
     target_cols = target_cols or TARGET_COLS
+    extra_cols = PLAYER_EXTRA_COLS if extra_player_cols is None else extra_player_cols
 
     home_players_all = game_df[game_df["home"] == 1].sort_values(minutes_col, ascending=False)
     away_players_all = game_df[game_df["home"] == 0].sort_values(minutes_col, ascending=False)
@@ -113,13 +115,18 @@ def build_game(game_df, max_players, n_starters=N_STARTERS, n_players_per_team=N
     away_players = away_players_all.head(n_players_per_team)
     player_df = pd.concat([home_players, away_players], ignore_index=True)
 
-    player_feats = _safe_player_feats(player_df, stat_cols, PLAYER_EXTRA_COLS)
+    player_feats = _safe_player_feats(player_df, stat_cols, extra_cols)
     line_cols = ["h_" + c for c in target_cols]
     player_lines = player_df[line_cols].values
-    # Targets are residuals vs player's own historical average.
-    # The over/under threshold is therefore 0 for every player.
-    player_targets = player_df[target_cols].values - player_lines
-    player_lines = np.zeros((player_feats.shape[0], len(target_cols)))
+
+    if raw_targets:
+        # Track B: raw actual stats as targets, h_stat as actual lines
+        player_targets = player_df[target_cols].values.astype(np.float32)
+        # keep player_lines as-is (actual h_stat values)
+    else:
+        # Standard: residuals vs h_stat; threshold is 0 for every player
+        player_targets = player_df[target_cols].values - player_lines
+        player_lines = np.zeros((player_feats.shape[0], len(target_cols)))
 
     # Minutes-based weights: higher-minute players contribute more to the loss
     player_weights = player_df[minutes_col].values.astype(np.float32)
@@ -136,7 +143,8 @@ def build_game(game_df, max_players, n_starters=N_STARTERS, n_players_per_team=N
 
 
 def build_tensors(df, n_starters=N_STARTERS, n_players_per_team=N_PLAYERS_PER_TEAM,
-                  stat_cols=None, target_cols=None, minutes_col=MINUTES_COL):
+                  stat_cols=None, target_cols=None, minutes_col=MINUTES_COL,
+                  extra_player_cols=None, raw_targets=False):
     stat_cols = stat_cols or STAT_COLS
     target_cols = target_cols or TARGET_COLS
 
@@ -145,7 +153,8 @@ def build_tensors(df, n_starters=N_STARTERS, n_players_per_team=N_PLAYERS_PER_TE
     X_team, X_players, Y_list, weights_list, lines = [], [], [], [], []
     for _, game in df.groupby("gameId"):
         result = build_game(game, max_players, n_starters, n_players_per_team,
-                            stat_cols, target_cols, minutes_col)
+                            stat_cols, target_cols, minutes_col,
+                            extra_player_cols=extra_player_cols, raw_targets=raw_targets)
         if result is None:
             continue
         team_vec, player_feats, player_targets, player_weights, player_lines = result
@@ -179,9 +188,11 @@ class NBADataset(Dataset):
         return self.X_team[idx], self.X_players[idx], self.Y[idx], self.weights[idx], self.lines[idx]
 
 
-def make_loaders(train_df, val_df, batch_size=32, **tensor_kwargs):
-    X_team_tr, X_pl_tr, weights_tr, Y_tr, lines_tr = build_tensors(train_df, **tensor_kwargs)
-    X_team_val, X_pl_val, weights_val, Y_val, lines_val = build_tensors(val_df, **tensor_kwargs)
+def make_loaders(train_df, val_df, batch_size=32, extra_player_cols=None, raw_targets=False, **tensor_kwargs):
+    X_team_tr, X_pl_tr, weights_tr, Y_tr, lines_tr = build_tensors(
+        train_df, extra_player_cols=extra_player_cols, raw_targets=raw_targets, **tensor_kwargs)
+    X_team_val, X_pl_val, weights_val, Y_val, lines_val = build_tensors(
+        val_df, extra_player_cols=extra_player_cols, raw_targets=raw_targets, **tensor_kwargs)
 
     # normalize targets using train statistics
     Y_mean = Y_tr.mean(dim=(0, 1))

@@ -34,6 +34,8 @@ def load_model(ckpt_path, device="cpu"):
     ).to(device)
 
     model_type = cfg.get("model_type", "standard")
+    aux_models = {}
+
     if model_type == "film":
         from src.model_film import PlayerDecoderFiLM
         decoder = PlayerDecoderFiLM(
@@ -43,6 +45,41 @@ def load_model(ckpt_path, device="cpu"):
             output_dim=cfg["n_target_cols"],
             dropout=0.0,
         ).to(device)
+    elif model_type == "attention":
+        from src.model_attention import PlayerDecoderAttention
+        decoder = PlayerDecoderAttention(
+            latent_dim=cfg["latent_dim"],
+            player_dim=cfg["player_dim"],
+            h_dim=cfg["h_dim_dec"],
+            n_heads=cfg.get("n_heads", 2),
+            output_dim=cfg["n_target_cols"],
+            dropout=0.0,
+        ).to(device)
+    elif model_type == "twostage":
+        from src.model_twostage import GameOutcomeDecoder, TwoStagePlayerDecoder
+        outcome_dec = GameOutcomeDecoder(
+            latent_dim=cfg["latent_dim"],
+            outcome_dim=cfg.get("outcome_dim", 6),
+            h_dim=64,
+        ).to(device)
+        outcome_dec.load_state_dict(ckpt["outcome_dec"])
+        outcome_dec.eval()
+        aux_models["outcome_dec"] = outcome_dec
+
+        decoder = TwoStagePlayerDecoder(
+            latent_dim=cfg["latent_dim"],
+            player_dim=cfg["player_dim"],
+            outcome_dim=cfg.get("outcome_dim", 6),
+            h_dim=cfg["h_dim_dec"],
+            output_dim=cfg["n_target_cols"],
+            dropout=0.0,
+        ).to(device)
+        # twostage: player_dec key
+        decoder.load_state_dict(ckpt["player_dec"])
+        decoder.eval()
+        encoder.load_state_dict(ckpt["encoder"])
+        encoder.eval()
+        return encoder, decoder, ckpt, cfg, aux_models
     else:
         decoder = PlayerDecoder(
             latent_dim=cfg["latent_dim"],
@@ -57,15 +94,19 @@ def load_model(ckpt_path, device="cpu"):
     encoder.eval()
     decoder.eval()
 
-    return encoder, decoder, ckpt, cfg
+    return encoder, decoder, ckpt, cfg, aux_models
 
 
 def diagnose(ckpt_path, num_samples=500, device="cpu", season_suffix="2019-26"):
     print(f"\n=== Z-Sensitivity Diagnostic ===")
     print(f"Checkpoint: {ckpt_path}")
 
-    encoder, decoder, ckpt, cfg = load_model(ckpt_path, device)
+    result = load_model(ckpt_path, device)
+    encoder, decoder, ckpt, cfg = result[0], result[1], result[2], result[3]
+    aux_models = result[4] if len(result) > 4 else {}
+    model_type = cfg.get("model_type", "standard")
     latent_dim = cfg["latent_dim"]
+    print(f"Model type: {model_type}")
 
     Y_mean = ckpt["Y_mean"].to(device)
     Y_std  = ckpt["Y_std"].to(device)
@@ -128,11 +169,18 @@ def diagnose(ckpt_path, num_samples=500, device="cpu", season_suffix="2019-26"):
 
             # sample z and compute P(over|z) for each sample
             p_over_samples = []  # (num_samples, batch, 16, 3)
+            outcome_dec = aux_models.get("outcome_dec")
             for _ in range(num_samples):
                 z = reparameterize(mu, logvar)
-                mu_pred, logvar_pred = decoder(z, X_p)
+                if model_type == "attention":
+                    mu_pred, logvar_pred = decoder(z, X_p, mask)
+                elif model_type == "twostage" and outcome_dec is not None:
+                    G_pred = outcome_dec(z)
+                    mu_pred, logvar_pred = decoder(z, G_pred, X_p)
+                else:
+                    mu_pred, logvar_pred = decoder(z, X_p)
                 sigma_pred = (0.5 * logvar_pred).exp()
-                # lines = 0 in normalized space
+                # lines = 0 in normalized space (residual targets) or threshold vs h_stat
                 z_score = mu_pred / sigma_pred
                 p_over = 0.5 * (1.0 + torch.erf(z_score / (2.0 ** 0.5)))
                 p_over_samples.append(p_over.cpu())
@@ -226,7 +274,8 @@ def diagnose(ckpt_path, num_samples=500, device="cpu", season_suffix="2019-26"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ckpt", type=str, default="checkpoints/model_latest.pt")
+    parser.add_argument("--ckpt", "--checkpoint", dest="ckpt",
+                        type=str, default="checkpoints/model_latest.pt")
     parser.add_argument("--num-samples", type=int, default=500)
     parser.add_argument("--season", type=str, default="2019-26")
     args = parser.parse_args()
