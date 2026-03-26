@@ -222,75 +222,118 @@ scripts/
 * Train recon ~0.997 vs val recon ~1.083 — gap reduced from 0.59 → 0.09
 * Win rate 27.9% (above 27.4% breakeven), ROI +1.7%
 * KL/dim dropped to ~0.58 (was 1.89) — dropout compresses encoder, z carries less information
-* Same-team phi mean jumped to 0.167 (was 0.013) — model now finds real same-team correlations
+* Same-team phi mean jumped to 0.167 (was 0.013) — later found to be an artifact of over-prediction bias, not real signal
 * Per-stat bias persists: points ~52% (good), rebounds ~55%, assists ~59% vs ~48-50% actual
 
-**Remaining blocker: input features lack sufficient predictive signal.**
-* Current features are only exponential decay averages of the player's own past stats
-* No opponent context (e.g., opponent defensive rating, pace, team matchup stats)
-* No game-level context beyond implicit team aggregates (e.g., Vegas lines, injury reports)
-* Assists over-prediction bias (~59%) suggests the model can't distinguish high-assist games
+**Advanced features added (usage rate, pace, ratings, rest days, back-to-backs, rolling correlations) partially address signal gaps.**
+* Pace, offensive/defensive ratings, usage share, and rest context are now included
+* Rolling per-player correlations (pts↔ast, pts↔reb) added as player-level features
+* Assists over-prediction bias (~59%) persists — no position-level opponent defensive context yet
+* No game-level metadata from external sources (Vegas lines, injury reports)
+
+**Root cause of over-prediction bias identified and fixed (probabilistic decoder).**
+* The deterministic decoder output point estimates with std ~0.19 normalized vs actual std ~1.0
+* Since Y_mean > 0 (players slightly outperform h_stat on average), predictions clustered above 0 → 67–70% predicted over vs ~50% actual
+* Fix: `PlayerDecoder` now outputs `(mu_pred, logvar_pred)` per player per stat; trained with Gaussian NLL
+* During simulation, `P(over | z) = Φ(mu_pred / sigma_pred)` is computed analytically via normal CDF instead of binary sampling
+* Result: predicted over rates now 50–51% across all stats, matching actual ~46–50%
+* Actual joint distribution confirmed near-uniform: OO=24.8%, OU=25.1%, UO=24.1%, UU=26.0%
+
+**Phi signal collapsed to ~0 after fixing the bias.**
+* With the probabilistic decoder, `sigma_pred ≈ 0.94` (model is uncertain about all players)
+* `mu_pred` std ~0.16 normalized — z barely moves predictions relative to noise floor
+* `P(over | z)` std ≈ 0.05–0.07 across all z samples — effectively constant at 0.5
+* Previous same-team phi = 0.167 was entirely an artifact of the over-prediction bias, not real signal
+* The model correctly fits the marginal distribution but finds no pairwise correlation signal
 
 ---
 
 ## Feature Engineering (Current)
 
-All features are **exponential decay averages** of each player's own historical stats, computed with `β=0.99` (per-day decay). The `h_` prefix denotes "historical".
+The `h_` prefix denotes exponentially time-decayed historical averages (per-day decay, computed as a weighted average of all prior games). Each stat has its own beta tuned for signal stability.
 
-### Decay Stats (16 per player)
+### Decay Stats (15 per player)
+
+`h_blocks` removed — adds no incremental signal once opponent data is present.
+
+| Feature | Beta | Description |
+|---|---|---|
+| `h_points` | 0.99 | Scoring average |
+| `h_assists` | 0.99 | Assist average |
+| `h_reboundsTotal` | 0.99 | Total rebound average |
+| `h_reboundsDefensive` | 0.99 | Defensive rebound average |
+| `h_reboundsOffensive` | 0.99 | Offensive rebound average |
+| `h_steals` | 0.995 | Steal average |
+| `h_turnovers` | 0.99 | Turnover average |
+| `h_foulsPersonal` | 0.99 | Personal foul average |
+| `h_fieldGoalsMade` | 0.995 | FGM average |
+| `h_fieldGoalsAttempted` | 0.99 | FGA average |
+| `h_threePointersMade` | 0.995 | 3PM average |
+| `h_threePointersAttempted` | 0.98 | 3PA average |
+| `h_freeThrowsMade` | 0.99 | FTM average |
+| `h_freeThrowsAttempted` | 0.99 | FTA average |
+| `h_numMinutes` | 0.97 | Minutes average (also used as loss weight) |
+
+### Advanced Decay Features (6 per player)
+
+Box-score derived. No external API — computed from `PlayerStatistics.csv` and `TeamStatistics.csv`.
+
+| Feature | Beta | Description |
+|---|---|---|
+| `h_usage_rate` | 0.97 | 100 × (FGA + 0.44×FTA + TOV) × (team_min/5) / (min × team_total) |
+| `h_usage_share` | 0.97 | Simplified possession share per player |
+| `h_pace` | 0.98 | Team possessions per 48 minutes |
+| `h_off_rating` | 0.99 | 100 × team_points / team_possessions (own team) |
+| `h_def_rating` | 0.99 | Opponent's offensive rating (defensive challenge faced) |
+| `h_implied_total` | 0.99 | h_off_rating + h_def_rating |
+
+All 21 decay + advanced features form `STAT_COLS` in `dataset.py`.
+
+### Game-Level Features (point-in-time, per team)
+
+Not decayed — computed fresh for each game from the schedule.
 
 | Feature | Description |
 |---|---|
-| `h_points` | Scoring average |
-| `h_assists` | Assist average |
-| `h_reboundsTotal` | Total rebound average |
-| `h_reboundsDefensive` | Defensive rebound average |
-| `h_reboundsOffensive` | Offensive rebound average |
-| `h_blocks` | Block average |
-| `h_steals` | Steal average |
-| `h_turnovers` | Turnover average |
-| `h_foulsPersonal` | Personal foul average |
-| `h_fieldGoalsMade` | FGM average |
-| `h_fieldGoalsAttempted` | FGA average |
-| `h_threePointersMade` | 3PM average |
-| `h_threePointersAttempted` | 3PA average |
-| `h_freeThrowsMade` | FTM average |
-| `h_freeThrowsAttempted` | FTA average |
-| `h_numMinutes` | Minutes average (also used as loss weight) |
+| `days_rest` | Days since last game, clipped to [0, 7] |
+| `is_b2b` | Back-to-back flag (1 if yes, 0 if no) |
 
-### Additional Per-Player Features
+Stored as `GAME_TEAM_COLS` in `dataset.py`, appended as team-level scalars to `X_team`.
+
+### Per-Player Extra Features
 
 | Feature | Description |
 |---|---|
 | `home` | Binary flag — 1 if player's team is home, 0 if away |
+| `cov_pts_ast` | 20-game rolling Pearson correlation between points and assists |
+| `cov_pts_reb` | 20-game rolling Pearson correlation between points and rebounds |
+
+Stored as `PLAYER_EXTRA_COLS` in `dataset.py`. These are appended per player in `X_players` but **not** pooled into `X_team`.
 
 ### How Features Are Used
 
 **`X_team` (game encoder input):**
-Team-level context built by pooling each team's roster into 6 rows (5 starters + 1 minutes-weighted bench aggregate), each with the 16 decay stats. Home and away team vectors are concatenated → shape `[num_games, 192]`.
+Team-level context built by pooling each team's roster into 6 rows (5 starters + 1 minutes-weighted bench aggregate), each with the 21 `STAT_COLS`. Home and away team blocks are concatenated, then per-team scalars (`days_rest`, `is_b2b`) for both teams are appended → shape `[num_games, 21×6×2 + 2×2]` = `[num_games, 256]`.
 
 **`X_players` (player decoder input):**
-Top 8 players per team (by `h_numMinutes`), 16 per game total. Each player has all 16 decay stats + `home` flag → shape `[num_games, 16, 17]`.
+Top 8 players per team (by `h_numMinutes`), 16 per game total. Each player has all 21 `STAT_COLS` + 3 `PLAYER_EXTRA_COLS` → shape `[num_games, 16, 24]`.
 
 **Targets (`Y`):**
 Residuals — `actual_stat - h_stat` for `[points, assists, reboundsTotal]`. The over/under threshold is therefore **0** for every player.
 
 ### What Is Missing (Key Gaps)
 
-* No opponent context (defensive rating, pace, position-level matchup stats)
-* No game-level metadata (Vegas lines, rest days, back-to-backs, injury reports)
+* No opponent context at position level (e.g., opponent defensive rating vs. guards vs. bigs)
+* No game-level metadata from external sources (Vegas lines, injury reports)
 * No home/away split in historical averages — only overall averages used
 
 ---
 
 ### Next Steps
 
-1. **Improve input features** — primary bottleneck for signal quality:
-   * Opponent defensive stats per position
-   * Team pace features
-   * Rest days / back-to-back flags
-   * Home/away split historical averages
+1. **Opponent position-level defensive context** — most impactful remaining gap
 2. **Real betting lines** — replace h_stat proxies with actual sportsbook lines
+3. **Home/away split historical averages** — current averages pool both contexts
 
 ---
 

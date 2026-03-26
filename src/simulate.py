@@ -22,13 +22,18 @@ def simulate(encoder, decoder, loader, Y_mean, Y_std, num_samples=100, device="c
             mask = (weights > 0).float()
             mu, logvar = encoder(X_t)
 
-            # sample num_samples predictions, threshold vs lines
+            # lines in normalized space: (batch, 16, 3)
+            lines_norm = (lines - Y_mean.to(device)) / Y_std.to(device)
+
+            # sample num_samples z values; compute P(over | z) analytically via normal CDF
             over_samples = []
             for _ in range(num_samples):
                 z = reparameterize(mu, logvar)
-                preds = decoder(z, X_p)
-                preds = preds * Y_std.to(device) + Y_mean.to(device)
-                over_samples.append((preds > lines).int())
+                mu_pred, logvar_pred = decoder(z, X_p)          # (batch, 16, 3)
+                sigma_pred = (0.5 * logvar_pred).exp()          # (batch, 16, 3)
+                z_score = (mu_pred - lines_norm) / sigma_pred
+                p_over = 0.5 * (1.0 + torch.erf(z_score / (2.0 ** 0.5)))
+                over_samples.append(p_over)                     # continuous [0, 1]
 
             # over: (num_samples, batch, n_players, n_stats)
             over = torch.stack(over_samples, dim=0)
@@ -38,6 +43,7 @@ def simulate(encoder, decoder, loader, Y_mean, Y_std, num_samples=100, device="c
             A = over.permute(1, 2, 3, 0).reshape(batch_size, n_players * n_stats, num_samples).float()
 
             OO, OU, UO, UU = compute_joint_outcomes(A, num_samples)
+            over_mean = A.mean(dim=2)       # (batch, n_vars) — marginal P(over) per variable
 
             # actual outcomes: denormalize Y, compare to lines, flatten, mask padded slots
             Y_actual = Y * Y_std.to(device) + Y_mean.to(device)
@@ -48,6 +54,7 @@ def simulate(encoder, decoder, loader, Y_mean, Y_std, num_samples=100, device="c
 
             results.append({
                 "OO": OO, "OU": OU, "UO": UO, "UU": UU,
+                "over_mean": over_mean,
                 "actual_over": actual_over_flat,
                 "mask_flat": mask_flat,
             })
@@ -57,10 +64,12 @@ def simulate(encoder, decoder, loader, Y_mean, Y_std, num_samples=100, device="c
 
 def compute_joint_outcomes(A, num_samples):
     """
-    A: (batch, n_vars, num_samples) — binary over/under indicators.
+    A: (batch, n_vars, num_samples) — P(over | z_s) for each sample s; continuous [0, 1].
 
-    Returns joint outcome count matrices (batch, n_vars, n_vars):
-      OO: both over, OU: i over j under, UO: i under j over, UU: both under.
+    Returns unnormalized joint outcome matrices (batch, n_vars, n_vars).
+    Dividing by num_samples gives joint probabilities:
+      OO ≈ E_z[P(over_i|z) * P(over_j|z)]
+      OU ≈ E_z[P(over_i|z) * P(under_j|z)]  etc.
     """
     S = A.sum(dim=2)                         # (batch, n_vars) — over count per var
     OO = A @ A.transpose(1, 2)               # (batch, n_vars, n_vars)

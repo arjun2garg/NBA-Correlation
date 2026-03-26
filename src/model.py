@@ -24,17 +24,19 @@ class GameEncoder(nn.Module):
 class PlayerDecoder(nn.Module):
     def __init__(self, latent_dim, player_dim, h_dim=24, output_dim=3, dropout=0.3):
         super().__init__()
-        self.net = nn.Sequential(
+        self.trunk = nn.Sequential(
             nn.Linear(latent_dim + player_dim, h_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(h_dim, output_dim),
         )
+        self.mu_head     = nn.Linear(h_dim, output_dim)
+        self.logvar_head = nn.Linear(h_dim, output_dim)
 
     def forward(self, z, player_feats):
         # z: (batch, latent_dim) → broadcast over players
-        z = z.unsqueeze(1).expand(-1, player_feats.size(1), -1)
-        return self.net(torch.cat([z, player_feats], dim=-1))
+        z_exp = z.unsqueeze(1).expand(-1, player_feats.size(1), -1)
+        h = self.trunk(torch.cat([z_exp, player_feats], dim=-1))
+        return self.mu_head(h), self.logvar_head(h).clamp(-6.0, 2.0)
 
 
 def reparameterize(mu, logvar):

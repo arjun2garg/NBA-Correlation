@@ -9,6 +9,13 @@ def masked_mse(pred, target, weights):
     return diff.sum() / (weights.sum() * pred.size(-1) + 1e-8)
 
 
+def masked_nll(mu_pred, logvar_pred, target, weights):
+    """Minutes-weighted Gaussian NLL. Constant log(2π) dropped."""
+    nll = 0.5 * (logvar_pred + (target - mu_pred).pow(2) / logvar_pred.exp())
+    nll = nll * weights.unsqueeze(-1)
+    return nll.sum() / (weights.sum() * mu_pred.size(-1) + 1e-8)
+
+
 def kl_divergence(mu, logvar, free_bits=0.0):
     # per-dimension KL: (batch, latent_dim)
     kl_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
@@ -30,9 +37,9 @@ def train_epoch(encoder, decoder, optimizer, loader, beta=0.001, free_bits=0.0, 
         optimizer.zero_grad()
         mu, logvar = encoder(X_t)
         z = reparameterize(mu, logvar)
-        preds = decoder(z, X_p)
+        mu_pred, logvar_pred = decoder(z, X_p)
 
-        recon = masked_mse(preds, Y, weights)
+        recon = masked_nll(mu_pred, logvar_pred, Y, weights)
         kl = kl_divergence(mu, logvar, free_bits=free_bits)
         loss = recon + beta * kl
         loss.backward()
@@ -57,7 +64,7 @@ def evaluate(encoder, decoder, loader, beta=0.001, num_samples=1, device="cpu"):
             mu, logvar = encoder(X_t)
             kl = kl_divergence(mu, logvar)
             recon = torch.stack([
-                masked_mse(decoder(reparameterize(mu, logvar), X_p), Y, weights)
+                masked_nll(*decoder(reparameterize(mu, logvar), X_p), Y, weights)
                 for _ in range(num_samples)
             ]).mean()
             loss = recon + beta * kl

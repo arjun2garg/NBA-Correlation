@@ -209,6 +209,30 @@ if __name__ == "__main__":
     over_rate = (oo_count + ou_count) / total_pairs  # marginal over rate for i
     print(f"  Marginal over rate (any single stat): {over_rate:.3f}")
 
+    # per-stat predicted vs actual over rates
+    print(f"\n=== Per-Stat Over Rates (Predicted vs Actual) ===")
+    n_stats = len(TARGET_COLS)
+    pred_over_sum  = torch.zeros(n_stats)
+    pred_over_cnt  = torch.zeros(n_stats)
+    actual_over_sum = torch.zeros(n_stats)
+    actual_over_cnt = torch.zeros(n_stats)
+    for batch in results:
+        # over_mean: marginal P(over) per variable, shape (batch, n_vars)
+        over_mean = batch["over_mean"]
+        mask      = batch["mask_flat"]                   # (batch, n_vars)
+        actual    = batch["actual_over"]                 # (batch, n_vars)
+        for s in range(n_stats):
+            stat_mask = mask[:, s::n_stats]             # (batch, n_players)
+            pred_over_sum[s]   += (over_mean[:, s::n_stats] * stat_mask).sum()
+            pred_over_cnt[s]   += stat_mask.sum()
+            actual_over_sum[s] += (actual[:, s::n_stats] * stat_mask).sum()
+            actual_over_cnt[s] += stat_mask.sum()
+    print(f"  {'Stat':<12}  {'Pred Over%':>10}  {'Actual Over%':>12}")
+    for s, name in enumerate(TARGET_COLS):
+        pred_rate   = (pred_over_sum[s] / pred_over_cnt[s]).item() if pred_over_cnt[s] > 0 else float("nan")
+        actual_rate = (actual_over_sum[s] / actual_over_cnt[s]).item() if actual_over_cnt[s] > 0 else float("nan")
+        print(f"  {name:<12}  {pred_rate:>10.3f}  {actual_rate:>12.3f}")
+
     if all_records:
         print(f"\n=== Top 10 Bets by Phi ===")
         top = sorted(all_records, key=lambda r: abs(r["phi"]), reverse=True)[:10]
