@@ -67,7 +67,7 @@ def mi_variance_term(encoder, decoder, X_t, X_p, weights, n_z_samples=8):
 
 def train_epoch_mi(encoder, decoder, optimizer, loader,
                    beta=0.001, free_bits=0.0, lambda_mi=0.1,
-                   n_z_samples=8, device="cpu"):
+                   n_z_samples=8, device="cpu", grad_clip=1.0):
     encoder.train()
     decoder.train()
     totals = {"loss": 0.0, "recon": 0.0, "kl": 0.0, "mi": 0.0}
@@ -90,6 +90,14 @@ def train_epoch_mi(encoder, decoder, optimizer, loader,
 
         loss = recon + beta * kl + lambda_mi * mi_term
         loss.backward()
+
+        # Gradient clipping prevents numerical explosion with large lambda_mi
+        if grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(
+                list(encoder.parameters()) + list(decoder.parameters()),
+                max_norm=grad_clip,
+            )
+
         optimizer.step()
 
         totals["loss"] += loss.item()

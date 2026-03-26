@@ -76,7 +76,7 @@ def p_over_std_diagnostic(encoder, decoder, val_loader, num_samples=100, device=
     return float(all_stds.mean()), float(all_stds.std())
 
 
-def train_epoch_attn(encoder, decoder, optimizer, loader, beta, free_bits, device):
+def train_epoch_attn(encoder, decoder, optimizer, loader, beta, free_bits, device, grad_clip=1.0):
     encoder.train()
     decoder.train()
     totals = {"recon": 0.0, "kl": 0.0}
@@ -91,6 +91,9 @@ def train_epoch_attn(encoder, decoder, optimizer, loader, beta, free_bits, devic
         kl = kl_divergence(mu, logvar, free_bits=free_bits)
         loss = recon + beta * kl
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(
+            list(encoder.parameters()) + list(decoder.parameters()), max_norm=grad_clip
+        )
         optimizer.step()
         totals["recon"] += recon.item()
         totals["kl"] += kl.item()

@@ -30,6 +30,8 @@ LAMBDA_MI_DEFAULT = 0.1
 N_Z_SAMPLES = 8
 FREE_BITS = 0.5
 WARMUP_EPOCHS = 15
+LAMBDA_WARMUP_EPOCHS = 20   # separate warmup for lambda_mi — prevents explosion at epoch 0
+GRAD_CLIP = 1.0             # prevents numerical instability at large lambda_mi values
 NUM_EPOCHS_DEFAULT = 60
 BATCH_SIZE = 64
 DEVICE = "cpu"
@@ -112,10 +114,13 @@ if __name__ == "__main__":
 
     for epoch in range(start_epoch, NUM_EPOCHS):
         beta_t = BETA * min(1.0, epoch / max(1, WARMUP_EPOCHS))
+        # Lambda MI warmup: ramp from 0 → target over LAMBDA_WARMUP_EPOCHS
+        # Prevents gradient explosion in early epochs when model is untrained
+        lambda_t = LAMBDA_MI * min(1.0, epoch / max(1, LAMBDA_WARMUP_EPOCHS))
         train_metrics = train_epoch_mi(
             encoder, decoder, optimizer, train_loader,
-            beta=beta_t, free_bits=FREE_BITS, lambda_mi=LAMBDA_MI,
-            n_z_samples=N_Z_SAMPLES, device=DEVICE
+            beta=beta_t, free_bits=FREE_BITS, lambda_mi=lambda_t,
+            n_z_samples=N_Z_SAMPLES, device=DEVICE, grad_clip=GRAD_CLIP,
         )
         val_metrics = evaluate_mi(
             encoder, decoder, val_loader, beta=beta_t, num_samples=10, device=DEVICE
@@ -123,7 +128,7 @@ if __name__ == "__main__":
 
         log(
             f"Epoch {epoch:03d}/{NUM_EPOCHS - 1} | "
-            f"beta {beta_t:.5f} | "
+            f"beta {beta_t:.5f}  lambda_mi {lambda_t:.5f} | "
             f"train recon {train_metrics['recon']:.4f}  kl/dim {train_metrics['kl'] / LATENT_DIM:.3f}  "
             f"mi {train_metrics['mi']:.5f} | "
             f"val recon {val_metrics['recon']:.4f}  kl/dim {val_metrics['kl'] / LATENT_DIM:.3f}"
