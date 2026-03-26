@@ -29,6 +29,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
+CACHE_PATH = ROOT / "data" / "processed" / "game_state_cache.csv"
 
 # Features always available from TeamStatistics
 TS_FEATURE_COLS = [
@@ -171,12 +172,19 @@ def load_team_game_state(
 def build_game_state_df(
     raw_dir: Path = RAW_DIR,
     include_pbp: bool = True,
+    use_cache: bool = True,
 ) -> pd.DataFrame:
     """
     Build game-level state vectors with home_ and away_ prefixed features.
 
     Returns one row per game with columns: gameId + GAME_STATE_COLS.
+    Caches the TS-only result to data/processed/game_state_cache.csv for fast reloads.
     """
+    if use_cache and not include_pbp and CACHE_PATH.exists():
+        gs = pd.read_csv(CACHE_PATH)
+        print(f"Loaded game state from cache: {len(gs):,} games")
+        return gs
+
     team_gs = load_team_game_state(raw_dir=raw_dir, include_pbp=include_pbp)
 
     home = team_gs[team_gs["home"] == 1][["gameId"] + TEAM_FEATURE_COLS].copy()
@@ -191,6 +199,12 @@ def build_game_state_df(
 
     game_gs = home.merge(away, on="gameId", how="inner")
     print(f"Game state vectors: {len(game_gs):,} games, {len(GAME_STATE_COLS)} features each")
+
+    if use_cache and not include_pbp:
+        CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        game_gs.to_csv(CACHE_PATH, index=False)
+        print(f"Cached game state to {CACHE_PATH}")
+
     return game_gs
 
 
