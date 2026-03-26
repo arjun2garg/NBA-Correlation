@@ -28,6 +28,9 @@ class PlayerDecoder(nn.Module):
             nn.Linear(latent_dim + player_dim, h_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
+            nn.Linear(h_dim, h_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
         )
         self.mu_head     = nn.Linear(h_dim, output_dim)
         self.logvar_head = nn.Linear(h_dim, output_dim)

@@ -59,7 +59,7 @@ if __name__ == "__main__":
     decoder.eval()
 
     # build val loader using checkpoint normalization stats
-    _, val_df = temporal_split(load_processed(season_suffix="2022-25"))
+    _, val_df = temporal_split(load_processed(season_suffix="2019-26"))
     X_team_v, X_pl_v, masks_v, Y_v, lines_v = build_tensors(val_df)
     Y_v      = (Y_v      - Y_mean)  / Y_std
     X_team_v = (X_team_v - Xt_mean) / Xt_std

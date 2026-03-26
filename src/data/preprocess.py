@@ -6,9 +6,9 @@ ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 PROCESSED_DIR = ROOT / "data" / "processed"
 
-# Three regular seasons: 2022-23, 2023-24, 2024-25
-SEASON_START = "2022-10-01"
-SEASON_END = "2025-04-14"
+# Seven regular seasons: 2019-20 through 2025-26
+SEASON_START = "2019-10-01"
+SEASON_END = "2026-04-14"
 
 # (raw_column, h_column_name, beta)
 # h_blocks removed — adds no incremental signal once opponent data is present
@@ -276,7 +276,7 @@ def build_input_target(df):
     return inputs, target
 
 
-def run(raw_path=None, out_dir=None, season_suffix="2022-25", skip_validation=False):
+def run(raw_path=None, out_dir=None, season_suffix="2019-26", skip_validation=False):
     out_dir = Path(out_dir) if out_dir else PROCESSED_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 

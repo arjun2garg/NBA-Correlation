@@ -19,16 +19,16 @@ from src.model import GameEncoder, PlayerDecoder
 from src.train import train_epoch, evaluate
 
 # --- config ---
-LATENT_DIM = 16
-H_DIM_ENC = 48
-H_DIM_DEC = 24
+LATENT_DIM = 32
+H_DIM_ENC = 128
+H_DIM_DEC = 64
 DROPOUT = 0.3
 LR = 1e-3
 BETA = 0.001        # target beta after warmup
 FREE_BITS = 0.5     # min KL per latent dim — prevents posterior collapse
 WARMUP_EPOCHS = 15  # linearly ramp beta from 0 → BETA over this many epochs
-NUM_EPOCHS = 100
-BATCH_SIZE = 32
+NUM_EPOCHS = 150
+BATCH_SIZE = 64
 DEVICE = "cpu"
 
 CKPT_DIR = Path("checkpoints")
@@ -45,7 +45,7 @@ def log(msg):
 
 if __name__ == "__main__":
     log("Loading data...")
-    df = load_processed(season_suffix="2022-25")
+    df = load_processed(season_suffix="2019-26")
     log(f"  {len(df)} rows loaded")
     train_df, val_df = temporal_split(df)
     log(f"  train={len(train_df)}  val={len(val_df)}")

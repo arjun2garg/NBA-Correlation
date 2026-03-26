@@ -181,10 +181,11 @@ scripts/
 
 ### Training Configuration
 
-* `LATENT_DIM = 16`, `H_DIM_ENC = 48`, `H_DIM_DEC = 24`, `DROPOUT = 0.3`
+* `LATENT_DIM = 32`, `H_DIM_ENC = 128`, `H_DIM_DEC = 64`, `DROPOUT = 0.3`
+* Decoder has two hidden layers: `(latent+player) → 64 → 64 → output`
 * `BETA = 0.001` with 15-epoch linear warmup from 0
 * `FREE_BITS = 0.5` nats/dim — prevents posterior collapse by enforcing minimum KL per dimension
-* `NUM_EPOCHS = 100`
+* `NUM_EPOCHS = 150`, `BATCH_SIZE = 64`
 * Checkpoint saved to `checkpoints/model_latest.pt` (gitignored)
 
 ### Simulation Configuration
@@ -245,6 +246,30 @@ scripts/
 * `P(over | z)` std ≈ 0.05–0.07 across all z samples — effectively constant at 0.5
 * Previous same-team phi = 0.167 was entirely an artifact of the over-prediction bias, not real signal
 * The model correctly fits the marginal distribution but finds no pairwise correlation signal
+
+**Expanded to 7 seasons (2019-26) and larger architecture — phi still zero.**
+* Data expanded from 3 seasons (~57k rows) to 7 seasons (170,823 rows: 2019-20 through 2025-26)
+* Architecture scaled up: `LATENT_DIM 16→32`, `H_DIM_ENC 48→128`, `H_DIM_DEC 24→64`, decoder now has 2 hidden layers
+* Train/val gap is negligible (0.424 vs 0.465) — no overfitting
+* KL/dim at end of training: ~0.31 (actual posterior), below the `free_bits=0.5` floor — z is barely used
+* Simulation: phi mean = 0.0007, std = 0.0011 — all 1.7M pairs in [-0.15, +0.15), 0 bets placed
+* Predicted over rates: points 52.1%, assists 52.2%, rebounds 52.2% vs actual 49.7%, 47.5%, 48.2% — slight persistent bias
+
+**Root cause of phi=0 diagnosed: decoder is insensitive to z.**
+* z does vary meaningfully between games: mu_z std = 0.46, range [-1.65, +1.80]
+* Within a game, sigma_z ≈ 0.60 (posterior spread across z samples)
+* BUT P(over|z) std across 500 z samples is only ±2–4% per player
+* This means the decoder's mu_pred barely responds to z movement — same prediction regardless of z
+* Cross-player correlations in P(over|z) across z samples are real and strong (0.7–0.98 for same-team players), but the absolute variance is so small (±2–4%) that the covariance is ~0.001, producing phi ≈ 0.004
+* The phi metric captures the *correlation contribution* to joint probability. With ±2–4% P(over) variation, even perfect correlation between players produces negligible phi
+* This is NOT because sigma_pred squashes P(over) toward 0.5 — it is because mu_pred does not respond to z. These are distinct failure modes.
+* With `BETA=0.001`, the KL term contributes ~0.016 to total loss. Reconstruction dominates, and the decoder learns to ignore z entirely.
+
+**Key distinction: the model is not guessing randomly.**
+* Mean P(over) per game ranges from 47% to 72% across val set — the encoder is differentiating games
+* Predicted vs actual game-level over rate has 0.57 Pearson correlation across 1,579 val games
+* Top quintile of predicted P(over): model predicts 58.6%, actual is 57.7% — well-calibrated
+* The signal exists at the game level but cannot be exploited for parlays with h_stat as lines, because the individual mispricing relative to true probability is what creates parlay edge, not correlation alone
 
 ---
 
@@ -327,13 +352,31 @@ Residuals — `actual_stat - h_stat` for `[points, assists, reboundsTotal]`. The
 * No game-level metadata from external sources (Vegas lines, injury reports)
 * No home/away split in historical averages — only overall averages used
 
+### Distributional Assumption Gap
+
+The current decoder models player stats as Gaussian (via NLL loss). This is wrong in a fundamental way: points, assists, and rebounds are **non-negative integers**. A Gaussian allows negative values and treats the distribution as symmetric, neither of which holds for NBA stats.
+
+Better candidate distributions:
+* **Poisson** — natural for count data, variance = mean. Simple but may be underdispersed (real NBA stats tend to have variance > mean).
+* **Negative Binomial** — count data with overdispersion (variance > mean). Likely a better fit than Poisson for bursty stats like assists and points.
+* **Log-normal** — non-negative, right-skewed continuous approximation. Easy to implement (just model log(stat+1) as Gaussian). Would naturally prevent negative predictions.
+
+This matters for simulation: if the decoder can output negative mu_pred, the P(over) computation via normal CDF is distorted for players near zero. A log-normal or negative binomial decoder would give better-calibrated P(over) estimates, especially for low-usage bench players.
+
 ---
 
 ### Next Steps
 
-1. **Opponent position-level defensive context** — most impactful remaining gap
-2. **Real betting lines** — replace h_stat proxies with actual sportsbook lines
-3. **Home/away split historical averages** — current averages pool both contexts
+**Most critical: force the decoder to be z-sensitive.**
+
+The decoder currently ignores z because `BETA=0.001` makes the KL term negligible (~0.016 contribution to loss). Until z meaningfully modulates mu_pred, phi will remain zero regardless of architecture size or data volume. The path forward:
+
+1. **Increase BETA** — try `BETA=0.01` or `BETA=0.1`. This forces the encoder to use z and the decoder to respond to it. Monitor KL/dim (want >1.0) and whether P(over|z) std across z samples rises from ±4% to ±10–20%.
+2. **Opponent position-level defensive context** — most impactful remaining feature gap
+3. **Real betting lines** — replace h_stat proxies with actual sportsbook lines; with sharp lines, residual uncertainty shrinks and z-induced P(over) variation becomes a larger fraction of total uncertainty
+4. **Home/away split historical averages** — current averages pool both contexts
+
+**What success looks like:** P(over|z) std across z samples rising to ±10–20%, phi std rising above 0.01, and eventually pairs exceeding the 0.15 threshold. If BETA=0.1 causes val recon to degrade significantly with no phi improvement, the signal may genuinely not be capturable by this architecture.
 
 ---
 
