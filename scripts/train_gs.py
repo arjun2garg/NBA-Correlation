@@ -31,6 +31,7 @@ torch.set_num_threads(1)
 
 from src.data.dataset import load_processed, temporal_split, TARGET_COLS
 from src.data.game_state_dataset import make_loaders_gs, G_DIM, GS_TARGET_COLS
+from src.data.game_state import G_VARIANTS, DEFAULT_VARIANT
 from src.model_gs import GCondDecoder, GameEncoder
 from src.train_gs import (
     train_decoder_epoch, eval_decoder,
@@ -63,6 +64,9 @@ def parse_args():
     p.add_argument("--season", type=str, default="2019-26")
     p.add_argument("--no-resume", action="store_true")
     p.add_argument("--diag-every", type=int, default=DIAG_EVERY)
+    p.add_argument("--variant", type=str, default=DEFAULT_VARIANT,
+                   choices=list(G_VARIANTS.keys()),
+                   help="G encoding variant to use")
     return p.parse_args()
 
 
@@ -170,7 +174,7 @@ if __name__ == "__main__":
         epochs1 = args.epochs1
         epochs2 = args.epochs2
 
-    log(f"Two-stage training | stage={args.stage} | season={args.season}")
+    log(f"Two-stage training | stage={args.stage} | season={args.season} | variant={args.variant}")
     log(f"epochs1={epochs1}, epochs2={epochs2}, beta={args.beta}")
 
     log("Loading data...")
@@ -180,17 +184,18 @@ if __name__ == "__main__":
 
     log("Building loaders...")
     train_loader, val_loader, norm_stats = make_loaders_gs(
-        train_df, val_df, batch_size=BATCH_SIZE, include_pbp=False,
+        train_df, val_df, batch_size=BATCH_SIZE, include_pbp=False, variant=args.variant,
     )
-    log(f"  G_DIM={G_DIM}, GS cols: {GS_TARGET_COLS}")
+    actual_g_dim = norm_stats["G_dim"]
+    log(f"  G_DIM={actual_g_dim} (variant={args.variant})")
 
     first_batch = next(iter(train_loader))
     team_dim = first_batch[0].shape[1]
     log(f"  team_dim={team_dim}  player_dim={PLAYER_DIM}")
 
-    decoder = GCondDecoder(g_dim=G_DIM, player_dim=PLAYER_DIM, h_dim=H_DIM_DEC,
+    decoder = GCondDecoder(g_dim=actual_g_dim, player_dim=PLAYER_DIM, h_dim=H_DIM_DEC,
                             output_dim=len(TARGET_COLS), dropout=DROPOUT).to(DEVICE)
-    encoder = GameEncoder(input_dim=team_dim, h_dim=H_DIM_ENC, g_dim=G_DIM,
+    encoder = GameEncoder(input_dim=team_dim, h_dim=H_DIM_ENC, g_dim=actual_g_dim,
                            dropout=DROPOUT).to(DEVICE)
 
     resume = not args.no_resume

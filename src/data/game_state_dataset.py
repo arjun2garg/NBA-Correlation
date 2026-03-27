@@ -6,6 +6,8 @@ the auxiliary loss: MSE(G_pred, actual_G_normalized).
 
 G is normalized using training-set statistics (same as other features).
 Games without G data are assigned zeros and masked out from the GS loss.
+
+Supports multiple G variants via the `variant` parameter in make_loaders_gs().
 """
 
 import numpy as np
@@ -18,11 +20,11 @@ from src.data.dataset import (
     load_processed, temporal_split, build_tensors, STAT_COLS, TARGET_COLS,
     MINUTES_COL, N_PLAYERS_PER_TEAM, N_STARTERS, PLAYER_EXTRA_COLS,
 )
-from src.data.game_state import build_game_state_df, GAME_STATE_COLS
+from src.data.game_state import build_game_state_df, get_variant_cols, DEFAULT_VARIANT
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Only TS-based features (always available, no PBP complexity)
+# Legacy defaults for backward compatibility (v1_baseline)
 GS_TARGET_COLS = [
     "home_actual_pace", "home_actual_3pa_rate", "home_actual_ast_rate",
     "home_actual_to_rate", "home_actual_margin", "home_actual_oreb_rate",
@@ -55,16 +57,22 @@ class NBADatasetGS(Dataset):
         )
 
 
-def _build_G_tensor(game_ids: list, game_state_df: pd.DataFrame) -> tuple:
+def _build_G_tensor(game_ids: list, game_state_df: pd.DataFrame, gs_cols: list) -> tuple:
     """
     Build G tensor and mask for a list of game IDs.
 
+    Args:
+        game_ids: ordered list of game IDs
+        game_state_df: game-level DataFrame with gameId + gs_cols
+        gs_cols: which columns to include in G
+
     Returns:
-        G_arr: np.ndarray (n_games, G_DIM)
+        G_arr: np.ndarray (n_games, len(gs_cols))
         mask:  np.ndarray (n_games,) bool
     """
+    g_dim = len(gs_cols)
     gs_map = game_state_df.set_index("gameId")
-    G_arr = np.zeros((len(game_ids), G_DIM), dtype=np.float32)
+    G_arr = np.zeros((len(game_ids), g_dim), dtype=np.float32)
     mask = np.zeros(len(game_ids), dtype=bool)
 
     for i, gid in enumerate(game_ids):
@@ -72,9 +80,9 @@ def _build_G_tensor(game_ids: list, game_state_df: pd.DataFrame) -> tuple:
             row = gs_map.loc[gid]
             vals = []
             valid = True
-            for col in GS_TARGET_COLS:
+            for col in gs_cols:
                 v = row.get(col, np.nan) if isinstance(row, pd.Series) else np.nan
-                if np.isnan(v):
+                if pd.isna(v):
                     valid = False
                     break
                 vals.append(v)
@@ -90,10 +98,15 @@ def make_loaders_gs(
     val_df: pd.DataFrame,
     batch_size: int = 64,
     include_pbp: bool = False,
+    variant: str = DEFAULT_VARIANT,
     **tensor_kwargs,
 ):
     """
     Build DataLoaders with game state G tensors included.
+
+    Args:
+        variant: G encoding variant (e.g. 'v1_baseline', 'v5_totals_only', 'v6_entropy')
+                 See src.data.game_state.G_VARIANTS for options.
 
     Returns everything make_loaders returns, plus:
         G_mean, G_std   — normalization stats for game state
@@ -108,19 +121,31 @@ def make_loaders_gs(
     train_game_ids = _get_ordered_game_ids(train_df)
     val_game_ids = _get_ordered_game_ids(val_df)
 
-    # Load game state
-    print("Loading game state G...")
-    game_state_df = build_game_state_df(include_pbp=include_pbp)
+    # Load game state for requested variant
+    needs_entropy = any("entropy" in c or "conc" in c for c in get_variant_cols(variant))
+    print(f"Loading game state G (variant={variant})...")
+    game_state_df = build_game_state_df(
+        include_pbp=include_pbp,
+        include_entropy=needs_entropy,
+        variant=variant,
+    )
+
+    # Determine which G columns to use for this variant
+    team_cols = get_variant_cols(variant)
+    variant_gs_cols = [f"home_{c}" for c in team_cols] + [f"away_{c}" for c in team_cols]
+    variant_gs_cols = [c for c in variant_gs_cols if c in game_state_df.columns]
+    variant_g_dim = len(variant_gs_cols)
 
     # Build raw G tensors
-    G_tr_raw, mask_tr = _build_G_tensor(train_game_ids, game_state_df)
-    G_val_raw, mask_val = _build_G_tensor(val_game_ids, game_state_df)
+    G_tr_raw, mask_tr = _build_G_tensor(train_game_ids, game_state_df, variant_gs_cols)
+    G_val_raw, mask_val = _build_G_tensor(val_game_ids, game_state_df, variant_gs_cols)
 
     print(f"  G coverage: train {mask_tr.sum()}/{len(mask_tr)}, val {mask_val.sum()}/{len(mask_val)}")
+    print(f"  G_DIM={variant_g_dim} (variant={variant})")
 
     # Normalize G using train-set stats (only rows where mask is True)
-    G_mean = np.zeros(G_DIM, dtype=np.float32)
-    G_std = np.ones(G_DIM, dtype=np.float32)
+    G_mean = np.zeros(variant_g_dim, dtype=np.float32)
+    G_std = np.ones(variant_g_dim, dtype=np.float32)
     if mask_tr.sum() > 0:
         G_train_valid = G_tr_raw[mask_tr]
         G_mean = G_train_valid.mean(axis=0).astype(np.float32)
@@ -163,6 +188,9 @@ def make_loaders_gs(
         "Xt_mean": Xt_mean, "Xt_std": Xt_std,
         "Xp_mean": Xp_mean, "Xp_std": Xp_std,
         "G_mean": torch.tensor(G_mean), "G_std": torch.tensor(G_std),
+        "G_dim": variant_g_dim,
+        "G_variant": variant,
+        "G_cols": variant_gs_cols,
     }
     return train_loader, val_loader, norm_stats
 
