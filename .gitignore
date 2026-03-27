@@ -6,5 +6,10 @@ __pycache__/
 data/raw/
 data/processed/
 checkpoints/
+checkpoints_gs/
+checkpoints_gs2/
+checkpoints_v5/
+checkpoints_v6/
+checkpoints_v7/
 *.pt
 *.pth
