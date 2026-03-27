@@ -159,6 +159,124 @@ would produce std≈0.08-0.10, putting phi within reach.
 
 ---
 
+## Phase 3: G Variant Sweep (v1–v6)
+
+Tested 6 G encoding variants for sigma_pred reduction (lower = more signal in G).
+
+| Variant | G_DIM | sigma_pred | P(over\|G) std | Notes |
+|---|---|---|---|---|
+| v1_baseline | 12 | 0.940 | 0.050 | pace, rates, margin per team |
+| v2_four_factors | 22 | ~0.93 | ~0.050 | +eFG, FT rate, quarter margins |
+| v3_team_totals | 18 | ~0.93 | ~0.050 | pts, ast, reb + v1 features |
+| v4_rich | 36 | ~0.93 | ~0.050 | all team features combined |
+| v5_totals_only | 6 | ~0.94 | ~0.048 | pts/ast/reb only (3 per team) |
+| v6_entropy | 16 | **0.919** | ~0.052 | +scoring entropy + mins HHI |
+
+**Key finding:** All game-level G variants converge to sigma_pred ~0.93–0.94. Adding more game-level
+features (even scoring entropy) provides negligible improvement. The ceiling for game-level G is
+sigma_pred ≈ 0.92, giving phi_max ≈ 0.05.
+
+The fundamental issue: game-level G is an aggregate. It tells you this was a high-pace game, but
+can't say *which* players benefited. Individual player outcome variance persists after conditioning.
+
+---
+
+## Phase 4: Player-Specific G (v7_player_mins_fga)
+
+### Hypothesis
+
+Give the decoder per-player actual minutes played and FGA alongside game totals. This gives player-specific
+conditioning: if player X played 38 minutes and took 22 shots, the decoder can predict their stats
+much more precisely. sigma_pred should drop substantially.
+
+### Architecture
+
+```
+G_game  (6-dim):   [home_pts, home_ast, home_reb, away_pts, away_ast, away_reb]  — shared across team
+G_player (2-dim/player): [actual_mins, actual_fga]  — player-specific actual usage
+
+PlayerGDecoder:
+  input per slot = G_game (broadcast) + G_player_i + player_feats_i  (6+2+24 = 32-dim)
+  → 2-layer hidden (h_dim=64) → (mu, logvar) per stat
+```
+
+### Results
+
+| Metric | v1_baseline | v7_player_mins_fga | Change |
+|---|---|---|---|
+| sigma_pred | 0.940 | **0.770** | **-18%** |
+| P(over\|G) std | 0.050 | **0.128** | **+3.6×** |
+| Theoretical phi_max | 0.012 | **0.066** | **+5.5×** |
+
+sigma_pred dropped from 0.940 → 0.770: minutes and FGA explain ~18% of residual variance.
+This is the largest sigma_pred reduction of any experiment in this project.
+
+### Phi Simulation (corrected Bernoulli sampling)
+
+Previous inline phi computation was wrong: it thresholded mean P(over) across G samples at 0.5,
+collapsing all variance. Correct method draws `Bernoulli(P(over|G))` per G sample.
+
+Results (500 G samples × 300 val games, sigma_G_game=0.6, sigma_G_player=0.5):
+
+| Pairs | Mean phi | Std | Max | >0.15 |
+|---|---|---|---|---|
+| All | 0.0021 | 0.046 | 0.284 | 0.16% |
+| Same-team | 0.0048 | 0.047 | 0.284 | 0.28% |
+| Cross-team | -0.0004 | 0.045 | 0.209 | 0.04% |
+
+Same-team phi is correctly positive; cross-team is correctly near zero or slightly negative.
+But mean phi=0.0048 remains well below the 0.15 threshold.
+
+### Why phi is still low
+
+The math is unambiguous:
+
+```
+phi_max = sigma_P^2 / Var(X) = sigma_P^2 / 0.25
+
+sigma_P = 0.128  (P(over|G) std)
+phi_max = 0.128^2 / 0.25 = 0.066
+```
+
+For phi > 0.15:  sigma_P must exceed **0.194** (v7 is at 66% of this)
+
+The remaining sigma_pred = 0.770 is unexplained variance that G doesn't capture. The only way to
+further reduce sigma_pred (and raise phi_max) is to give the decoder more informative player-level G.
+
+### What would close the gap
+
+| Player-level G addition | Expected sigma_pred | Expected phi_max |
+|---|---|---|
+| actual_mins + actual_fga (v7) | 0.770 | 0.066 |
+| + actual_pts (per player) | ~0.55 | ~0.12 |
+| + actual_pts + actual_ast + actual_reb | ~0.30 | ~0.36 |
+
+But giving the decoder actual player points/assists defeats the purpose — it's giving the answer.
+The practical path is to improve pre-game predictions of player-level G:
+- Historical usage rate as G_player proxy (currently in X_players, not G_player)
+- Sharp sportsbook lines: residual uncertainty after conditioning on lines is ~40% lower
+
+---
+
+## Final Comparison
+
+| Experiment | sigma_pred | P(over\|G) std | phi_max | phi_mean (sim) |
+|---|---|---|---|---|
+| Baseline VAE (BETA=0.001) | 0.94 | 0.024 | 0.002 | 0.0007 |
+| BETA=0.1 | 0.94 | 0.018 | 0.001 | ~0.0007 |
+| FiLM / Attention / MI | 0.94 | 0.017–0.020 | ~0.001 | ~0.0007 |
+| Two-Stage GS v1_baseline | 0.94 | 0.050 | 0.010 | 0.0032 |
+| Two-Stage GS v6_entropy | 0.919 | 0.052 | 0.011 | ~0.003 |
+| **v7 player-specific G** | **0.770** | **0.128** | **0.066** | **0.0048** |
+
+**v7 is the best result by every metric.** Same-team phi signal is correctly directional (positive)
+and phi_max = 0.066 is the first time we've crossed 0.05. But 0.066 < 0.15 threshold.
+
+**The phi > 0.15 barrier cannot be crossed with minutes+FGA alone.**
+The signal is real but insufficient. Next major unlock is sportsbook lines as G proxy.
+
+---
+
 ## Comparison to Previous Experiments
 
 | Experiment | P(over\|z) std | phi max | Notes |
@@ -168,23 +286,29 @@ would produce std≈0.08-0.10, putting phi within reach.
 | FiLM decoder | 0.017 | ~0.003 | No improvement |
 | Attention + PBP | 0.019 | ~0.003 | Same floor |
 | MI variance (λ=0.3) | 0.020 | ~0.003 | NaN beyond λ=0.3 |
-| **Two-Stage GS (this)** | **0.050** | **0.012** | **Best result; new ceiling** |
-
-Two-stage is the clear winner: 2x P(over|z) std improvement by forcing decoder to use actual G.
-But even with optimal architecture, sigma_pred=0.94 prevents crossing phi=0.15.
+| Two-Stage GS v1 | 0.050 | 0.012 | Best prior; new ceiling |
+| **v7 player-specific G** | **0.128** | **0.066** | **New best; phi > 0.05 for first time** |
 
 ---
 
 ## Files Added This Session
 
-- `src/data/game_state.py` — Computes actual G from TeamStatistics + optional PBP
-- `src/data/game_state_dataset.py` — Dataset/loader with G tensor, G_mask, normalization
+- `src/data/game_state.py` — Computes actual G from TeamStatistics + optional PBP; 6 variants
+- `src/data/game_state_dataset.py` — Dataset/loader with G tensor, G_mask, normalization; variant support
 - `src/model_gs.py` — GCondDecoder (Stage 1) + GameEncoder (Stage 2) + reparameterize
 - `src/train_gs.py` — Stage 1 decoder training, Stage 2 encoder training, P(over|G) diagnostic
 - `scripts/validate_game_state.py` — Phase 1 supervised AUC validation
-- `scripts/train_gs.py` — Two-stage training entry point (--stage 1/2/both)
+- `scripts/train_gs.py` — Two-stage training entry point (--stage 1/2/both, --variant)
 - `scripts/simulate_gs.py` — Simulation: sample G → decoder → phi → backtest
+- `scripts/train_player_g.py` — v7 player-specific G decoder training + diagnostics
+- `scripts/simulate_player_g.py` — Correct Bernoulli phi simulation for v7 decoder
+- `scripts/eval_g_variants.py` — AUC evaluation for G variant comparison
 - `experiments/phase1_game_state_findings.md` — Phase 1 detailed findings
 - `data/processed/game_state_cache.csv` — Cached 55,881-game G vectors
 
-**Checkpoints:** `checkpoints_gs2/decoder_stage1.pt`, `checkpoints_gs2/encoder_stage2.pt`
+**Checkpoints:**
+- `checkpoints_gs/decoder_stage1.pt` — v1 Stage 1 decoder
+- `checkpoints_gs2/decoder_stage1.pt`, `checkpoints_gs2/encoder_stage2.pt` — v1 full two-stage
+- `checkpoints_v5/decoder_stage1.pt` — v5_totals_only Stage 1 decoder
+- `checkpoints_v6/decoder_stage1.pt` — v6_entropy Stage 1 decoder
+- `checkpoints_v7/decoder_player_g.pt` — v7 player-specific G decoder (best result)
