@@ -277,6 +277,99 @@ The signal is real but insufficient. Next major unlock is sportsbook lines as G 
 
 ---
 
+## Phase 5: Backtest Series — Isolating Correlation vs. Individual Signal
+
+Three backtest scripts were written to test whether the v7 model's oracle signal comes from
+inter-player correlation or individual player predictability.
+
+### Setup
+
+- 500 val games × 500 G samples (sigma_G_game=0.6, sigma_G_player=0.5)
+- Bet $1 per pair, equal $0.50 split within direction group (same or opposite)
+- Payout: 3.645× total return at -110/-110 (-8.9% baseline ROI under no signal)
+- All three scripts use the oracle G (actual mins + FGA) — upper bound on real performance
+
+### Script 1: Proportional Backtest (`backtest_player_g.py`)
+
+Bet $1 per pair split proportionally across all 4 outcomes (OO/OU/UO/UU) by simulated probability.
+PnL = P_sim(actual_outcome) × 3.645 − 1.
+
+| Pair type | ROI |
+|---|---|
+| same_player | +12% |
+| same_team | +37% |
+| cross_team | +37% |
+| **TOTAL** | **+37.53%** |
+
+### Script 2: Strategy Comparison (`backtest_threshold.py`)
+
+Compares three stake allocation strategies on the same oracle setup.
+
+| Strategy | ROI |
+|---|---|
+| Proportional (all 4 outcomes) | +37.53% |
+| Top-1 (most likely outcome only) | +86.30% |
+| Threshold (P > 0.274 breakeven) | +65.09% |
+
+**Key finding:** Very strong oracle ROI (+37–86%). This looks like a working model — but see Phase 5C.
+
+### Script 3: Correlation Isolation (`backtest_correlation.py`)
+
+Three strategies designed to isolate where the signal actually comes from.
+
+**Strategy 1 — Raw P_same (baseline, leaks individual signal):**
+Bet "same direction" if P_OO + P_UU > 0.5, "opposite" otherwise. $0.50 each on both outcomes in predicted group.
+
+| | ROI | Win% |
+|---|---|---|
+| TOTAL | +7.64% | 59.1% |
+
+**Strategy 2 — Phi-based / Cov(Xi, Xj) (pure inter-player correlation):**
+Confidence = P_OO − S_i × S_j (excess co-occurrence beyond independence = 2 × Cov). Removes individual marginal effects.
+
+| | ROI | Win% |
+|---|---|---|
+| TOTAL | **−8.83%** | 50.0% |
+
+**Strategy 3 — Balanced lines (definitive correlation test):**
+Set each player's line to the model's median mu prediction for the game (median of mu across 500 G samples).
+This forces P(over) = 50% per player in simulation, so OO = UU and OU = UO under independence.
+Actual outcome: continuous Y residual > median_mu (same normalized space).
+If genuine correlation exists → win rate > 50%. If not → win rate ≈ 50%.
+
+| | ROI | Win% |
+|---|---|---|
+| same_player | −4.19% | 52.6% |
+| same_team | −9.95% | 49.4% |
+| cross_team | −8.93% | 50.0% |
+| **TOTAL** | **−9.18%** | **49.8%** |
+
+Confusion table is near-uniform (21–28% per cell) regardless of predicted direction — indistinguishable from random.
+
+### Conclusion
+
+The +37–86% oracle ROI comes **entirely from individual player predictability**, not from inter-player correlation.
+
+When actual mins+FGA are known:
+- P(over|G) std = 0.239 (much higher than the 0.128 from noise-perturbed G)
+- P(over) ranges 0.000–0.998 per player — the model correctly prices individual outcomes far from 50%
+- The market implicitly prices all outcomes at 25% (independence assumption at fair odds)
+- This creates individual edge that manifests as oracle ROI
+
+But the **correlation** between players (the covariance structure) is zero. Stripping out individual signal
+via the balanced-line test drops ROI from +7.64% → −9.18% in one step, confirming no cross-player structure.
+
+**Root cause:** Player outcome variance is dominated by game-to-game individual noise (sigma_pred = 0.77).
+This noise is independent across players — shared game state (pace, margin) explains only ~4% AUC lift
+and does not create exploitable joint variation. phi_max = 0.066 with oracle G; actual phi ≈ 0.005.
+
+**What would create real correlation signal:**
+The only path to positive EV parlays is line mispricing on individual legs, not correlation.
+Correlation only amplifies existing individual edges. Without sharp pre-game lines (or injury/lineup
+information that moves lines before markets adjust), there is no edge to amplify.
+
+---
+
 ## Comparison to Previous Experiments
 
 | Experiment | P(over\|z) std | phi max | Notes |
@@ -291,8 +384,13 @@ The signal is real but insufficient. Next major unlock is sportsbook lines as G 
 
 ---
 
-## Files Added This Session
+## Files Added This Session (Phase 5)
 
+- `scripts/backtest_player_g.py` — Proportional oracle backtest (+37.53% ROI)
+- `scripts/backtest_threshold.py` — Strategy comparison: proportional / top-1 / threshold
+- `scripts/backtest_correlation.py` — Three-strategy correlation isolation test (raw / phi / balanced)
+
+**Phase 1–4 files:**
 - `src/data/game_state.py` — Computes actual G from TeamStatistics + optional PBP; 6 variants
 - `src/data/game_state_dataset.py` — Dataset/loader with G tensor, G_mask, normalization; variant support
 - `src/model_gs.py` — GCondDecoder (Stage 1) + GameEncoder (Stage 2) + reparameterize

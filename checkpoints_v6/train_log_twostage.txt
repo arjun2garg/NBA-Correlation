@@ -1,0 +1,74 @@
+Two-stage training | stage=1 | season=2019-26 | variant=v6_entropy
+epochs1=60, epochs2=100, beta=0.01
+Loading data...
+  train=136880  val=33892
+Building loaders...
+  G_DIM=16 (variant=v6_entropy)
+  team_dim=256  player_dim=24
+[Stage 1] Starting from scratch
+[Stage 1] Training decoder: G + player_feats → residuals  (60 epochs)
+  Stage1 Epoch 000/59 | train NLL 0.4842 | val NLL 0.4646
+  Stage1 Epoch 001/59 | train NLL 0.4542 | val NLL 0.4520
+  Stage1 Epoch 002/59 | train NLL 0.4422 | val NLL 0.4441
+  Stage1 Epoch 003/59 | train NLL 0.4369 | val NLL 0.4382
+  Stage1 Epoch 004/59 | train NLL 0.4314 | val NLL 0.4331
+  Stage1 Epoch 005/59 | train NLL 0.4284 | val NLL 0.4305
+  Stage1 Epoch 006/59 | train NLL 0.4269 | val NLL 0.4276
+  Stage1 Epoch 007/59 | train NLL 0.4245 | val NLL 0.4256
+  Stage1 Epoch 008/59 | train NLL 0.4228 | val NLL 0.4260
+  Stage1 Epoch 009/59 | train NLL 0.4233 | val NLL 0.4241
+  Stage1 Epoch 010/59 | train NLL 0.4210 | val NLL 0.4232
+  Stage1 Epoch 011/59 | train NLL 0.4198 | val NLL 0.4216
+  Stage1 Epoch 012/59 | train NLL 0.4180 | val NLL 0.4222
+  Stage1 Epoch 013/59 | train NLL 0.4182 | val NLL 0.4218
+  Stage1 Epoch 014/59 | train NLL 0.4173 | val NLL 0.4204
+  Stage1 Epoch 015/59 | train NLL 0.4172 | val NLL 0.4207
+  Stage1 Epoch 016/59 | train NLL 0.4153 | val NLL 0.4190
+  Stage1 Epoch 017/59 | train NLL 0.4138 | val NLL 0.4180
+  Stage1 Epoch 018/59 | train NLL 0.4143 | val NLL 0.4182
+  Stage1 Epoch 019/59 | train NLL 0.4146 | val NLL 0.4180
+  Stage1 Epoch 020/59 | train NLL 0.4129 | val NLL 0.4173
+  Stage1 Epoch 021/59 | train NLL 0.4122 | val NLL 0.4167
+  Stage1 Epoch 022/59 | train NLL 0.4135 | val NLL 0.4173
+  Stage1 Epoch 023/59 | train NLL 0.4117 | val NLL 0.4168
+  Stage1 Epoch 024/59 | train NLL 0.4116 | val NLL 0.4159
+  Stage1 Epoch 025/59 | train NLL 0.4111 | val NLL 0.4168
+  Stage1 Epoch 026/59 | train NLL 0.4116 | val NLL 0.4166
+  Stage1 Epoch 027/59 | train NLL 0.4113 | val NLL 0.4153
+  Stage1 Epoch 028/59 | train NLL 0.4106 | val NLL 0.4160
+  Stage1 Epoch 029/59 | train NLL 0.4085 | val NLL 0.4151
+  Stage1 Epoch 030/59 | train NLL 0.4101 | val NLL 0.4155
+  Stage1 Epoch 031/59 | train NLL 0.4094 | val NLL 0.4154
+  Stage1 Epoch 032/59 | train NLL 0.4103 | val NLL 0.4137
+  Stage1 Epoch 033/59 | train NLL 0.4086 | val NLL 0.4147
+  Stage1 Epoch 034/59 | train NLL 0.4099 | val NLL 0.4150
+  Stage1 Epoch 035/59 | train NLL 0.4085 | val NLL 0.4143
+  Stage1 Epoch 036/59 | train NLL 0.4087 | val NLL 0.4141
+  Stage1 Epoch 037/59 | train NLL 0.4092 | val NLL 0.4151
+  Stage1 Epoch 038/59 | train NLL 0.4092 | val NLL 0.4140
+  Stage1 Epoch 039/59 | train NLL 0.4085 | val NLL 0.4141
+  Stage1 Epoch 040/59 | train NLL 0.4098 | val NLL 0.4145
+  Stage1 Epoch 041/59 | train NLL 0.4082 | val NLL 0.4142
+  Stage1 Epoch 042/59 | train NLL 0.4089 | val NLL 0.4151
+  Stage1 Epoch 043/59 | train NLL 0.4093 | val NLL 0.4151
+  Stage1 Epoch 044/59 | train NLL 0.4073 | val NLL 0.4138
+  Stage1 Epoch 045/59 | train NLL 0.4085 | val NLL 0.4140
+  Stage1 Epoch 046/59 | train NLL 0.4074 | val NLL 0.4131
+  Stage1 Epoch 047/59 | train NLL 0.4071 | val NLL 0.4139
+  Stage1 Epoch 048/59 | train NLL 0.4072 | val NLL 0.4137
+  Stage1 Epoch 049/59 | train NLL 0.4076 | val NLL 0.4134
+  Stage1 Epoch 050/59 | train NLL 0.4067 | val NLL 0.4131
+  Stage1 Epoch 051/59 | train NLL 0.4069 | val NLL 0.4135
+  Stage1 Epoch 052/59 | train NLL 0.4066 | val NLL 0.4125
+  Stage1 Epoch 053/59 | train NLL 0.4082 | val NLL 0.4133
+  Stage1 Epoch 054/59 | train NLL 0.4061 | val NLL 0.4128
+  Stage1 Epoch 055/59 | train NLL 0.4064 | val NLL 0.4136
+  Stage1 Epoch 056/59 | train NLL 0.4076 | val NLL 0.4139
+  Stage1 Epoch 057/59 | train NLL 0.4067 | val NLL 0.4128
+  Stage1 Epoch 058/59 | train NLL 0.4064 | val NLL 0.4131
+  Stage1 Epoch 059/59 | train NLL 0.4057 | val NLL 0.4134
+[Stage 1] Done. Final val NLL: 0.4134
+Training complete.
+Checkpoints in: checkpoints_v6/
+  Stage 1 decoder: checkpoints_v6/decoder_stage1.pt
+  Stage 2 encoder: checkpoints_v6/encoder_stage2.pt
