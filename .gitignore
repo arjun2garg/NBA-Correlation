@@ -16,3 +16,4 @@ checkpoints_v7/
 *.pth
 experiments/
 notebooks/
+logs/
