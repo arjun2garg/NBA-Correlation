@@ -14,3 +14,5 @@ checkpoints_v6/
 checkpoints_v7/
 *.pt
 *.pth
+experiments/
+notebooks/
